@@ -76,13 +76,11 @@ bool is_match_loaded()
 }
 
 bool AreWeInGameAndHosting() {
-
-	bool rt = false;
-
+	
 	if (is_match_loaded() && Live_AreWeHost()) {
 		return true;
 	}
-	return rt;
+	return false;
 
 }
 
