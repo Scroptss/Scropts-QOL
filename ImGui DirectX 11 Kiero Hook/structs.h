@@ -272,6 +272,11 @@ struct presence_data_s
 	presence_platform_data_s platform;
 };
 
+struct vec2_t {
+	int x;
+	int y;
+};
+
 
 
 enum bdArchiveUpdateType

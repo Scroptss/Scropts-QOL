@@ -227,6 +227,13 @@ const char* offhandMenuNames[] = {
     "Select"
 };
 
+const char* cpmapnames[] = { "cp_mi_eth_prologue", "cp_mi_zurich_newworld", "cp_mi_sing_blackstation",
+"cp_mi_sing_biodomes", "cp_mi_sing_sgen", "cp_mi_sing_vengeance", "cp_mi_cairo_ramses", "cp_mi_cairo_infection",
+"cp_mi_cairo_aquifer", "cp_mi_cairo_lotus","cp_mi_zurich_coalescence" };
+
+const char* zmmapnames[] = { "zm_zod", "zm_factory", "zm_castle", "zm_island", "zm_stalingrad", "zm_genesis", "zm_asylum", "zm_cosmodrome", "zm_moon", "zm_prototype",
+"zm_sumpf", "zm_theater", "zm_temple", "zm_tomb" };
+
 const char* slots[] = {
     "primary",
     "primaryattachment1",

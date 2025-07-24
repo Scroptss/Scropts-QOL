@@ -233,6 +233,8 @@ extern std::string primaryPreviews[10];
 extern int primarySelectedItems[10];
 extern int primarySelectedSlot[10];
 
+extern const char* cpmapnames[11];
+extern const char* zmmapnames[14];
 extern const char* secondaryMenuNames[11];
 extern const char* secondarySlots[10];
 extern std::string secondaryPreviews[10];
