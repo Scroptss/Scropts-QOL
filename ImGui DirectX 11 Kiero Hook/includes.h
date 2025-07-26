@@ -17,6 +17,7 @@
 #include "imgui/imgui_impl_dx11.h"
 #include "imgui/imgui_stdlib.h"
 #include "imgui/ImGuiNotify.hpp"
+#include "spoof.h"
 #include "structs.h"
 #include "font.hpp"
 #include "FontAwesome/fa_solid_900.h"

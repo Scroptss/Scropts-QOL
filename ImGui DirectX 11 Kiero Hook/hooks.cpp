@@ -102,7 +102,7 @@ namespace hooks {
 
 		// Patches 
 
-		// Loadside
+		// Loadside Crash
 		const char* __fastcall hkCL_GetConfigString(std::int32_t configStringIndex)
 		{
 
@@ -121,6 +121,7 @@ namespace hooks {
 			return CL_GetConfigString(configStringIndex);
 		}
 
+		
 		bool hkLobbyMsgRW_PackageElement(LobbyMsg* lobbyMsg, bool addElement) {
 
 			auto should_ignore = lobbyMsg->msg.overflowed;
@@ -131,154 +132,6 @@ namespace hooks {
 
 			return LobbyMsgRW_PackageElement(lobbyMsg, addElement);
 
-			/*if (type == structures::MESSAGE_ELEMENT_ARRAY_BEGIN || type == structures::MESSAGE_ELEMENT_ARRAY_ELEMENT)
-			{
-				Context->Rax = FALSE;
-			}
-
-			else
-			{
-				Context->Rax = TRUE;
-			}
-
-			Context->Rip = offsets::LobbyMsgRW_PackageElement_add_rsp;*/
-
-			/*auto type = MSG_ReadByte(&lobbyMsg->msg);
-
-			if (type == MESSAGE_ELEMENT_ARRAY_BEGIN || type == MESSAGE_ELEMENT_ARRAY_ELEMENT) {
-			}
-
-			return false;*/
-
-		}
-
-		// LivePresence "autocrash" when loading friends presence. Supposedly unloggable.
-
-		/***********************************************************************************/
-
-		bool hkUI_IsRenderingImmediately() {
-
-			return true;
-
-		}
-
-		void hkR_ConvertColorToBytes(ImVec4* color, byte* bytes) {
-
-			auto desiredColor = bUIRgb ? (ImVec4)mainRgb() : (ImVec4)uiColor;
-
-			void* returnAddress = _ReturnAddress();
-
-			if (bColoredUI && returnAddress != nullptr && color->w > 0.1f) {
-
-				if (returnAddress == (void*)(ProcessBase + 0x1F34A23) || returnAddress == (void*)(ProcessBase + 0x1CD998F) || returnAddress == (void*)(ProcessBase + 0x2814DC7)
-					|| returnAddress == (void*)(ProcessBase + 0x1CD92A7) || returnAddress == (void*)(ProcessBase + 0x1CD9FB3) || returnAddress == (void*)(ProcessBase + 0x228192A)) {
-					return R_ConvertColorToBytes(&desiredColor, bytes);
-				}
-
-			}
-
-			return R_ConvertColorToBytes(color, bytes);
-
-		}
-
-		unsigned int hkSteam_UserHasLicenseForApp(__int64 steamID, unsigned __int64 appID) {
-
-			ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "UserHasLicenseForApp called for %llu, returning as valid...", steamID });
-
-			return 0;
-		}
-
-		bool hkSteam_bIsDlcInstalled(__int64 vTableThisPtr, uint64_t appID) {
-
-			if (bUnlockFullGame) return true;
-
-			auto it = dlcCache.find(appID);
-			if (it != dlcCache.end()) {
-				return it->second;
-			}
-
-			bool result = Steam_bIsDlcInstalled_o(vTableThisPtr, appID);
-
-			dlcCache[appID] = result;
-
-			return result;
-
-
-		}
-
-		bool hkSteam_bIsAppInstalled(__int64 vTableThisPtr, uint64_t appID) {
-
-			if (bUnlockFullGame) return true;
-
-			auto it = appCache.find(appID);
-			if (it != appCache.end()) {
-				return it->second;
-			}
-
-			bool result = Steam_bIsAppInstalled_o(vTableThisPtr, appID);
-
-			appCache[appID] = result;
-
-			return result;
-		}
-
-		char hkUserHasLicenseForApp(__int64 mapInfo, __int64* userObj) {
-
-			__int64 xuid = *userObj;
-			//ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "UserHasLicenseForApp called for %llu, returning as valid...", xuid });
-
-			//*(DWORD*)(mapInfo + 0xC18) = 0; // Would jump to successful ownership but caused XP issues.
-
-			*((BYTE*)userObj + 13) = 1;
-			*((BYTE*)userObj + 12) |= 0;
-			*((DWORD*)userObj + 4) |= 8u;
-
-			return 1;
-
-		}
-
-		__int64 hkLiveInventory_GetItemQuantity(ControllerIndex_t controllerIndex, int itemId) {
-
-			if (itemId == 99003 && bSpoofSlots) {
-				return 1;
-			}
-
-			if (bSpoofBlackMarket) return iBlackmarketAmt;
-
-			return LiveInventory_GetItemQuantity(controllerIndex, itemId);
-
-		}
-
-		bool hkLiveInventory_AreExtraSlotsPurchased(ControllerIndex_t controllerIndex) {
-
-			if (bSpoofSlots) {
-				return true;
-			}
-			return LiveInventory_AreExtraSlotsPurchased(controllerIndex);
-		}
-
-		bool hkLiveEntitlements_IsEntitlementActiveForController(ControllerIndex_t controllerIndex, int incentiveId) {
-
-			if (bSpoofPurchases) return true;
-
-			return LiveEntitlements_IsEntitlementActiveForController(controllerIndex, incentiveId);
-
-		}
-
-		bool hkLive_UserGetName(ControllerIndex_t controllerIndex, char* buf, int bufSize) {
-
-			__int64 v3; // rbx
-			int* v6; // rax
-			int v9; // [rsp+40h] [rbp+8h] BYREF
-
-			v3 = bufSize;
-			v9 = bufSize;
-			Memset(buf, 0i64, bufSize);
-			v6 = &v9;
-
-			Live_Base_UserGetName((UINT8*)buf, *v6, 1);
-
-			return 1;
 		}
 
 		float hkflsomeWeirdCharacterIndex(__int64 a1, int a2, int a3) {
@@ -292,190 +145,6 @@ namespace hooks {
 
 			return -1.0f;
 			
-		}
-
-		void hkI_Strcpy(BYTE* a1, __int64 a2, const char* a3) {
-
-			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x264A547)) {
-
-				if (!custom_title_buf.empty()) {
-
-					static std::string titleBuf = utils::decodeEncodedChars(custom_title_buf);
-
-					return I_Strcpy(a1, a2, titleBuf.c_str());
-				}
-			}
-
-			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x264A580)) {
-
-				if (!custom_desc_buf.empty()) {
-
-					static std::string descBuf = utils::decodeEncodedChars(custom_desc_buf);
-
-					return I_Strcpy(a1, a2, descBuf.c_str());
-				}
-			}
-
-			return I_Strcpy(a1, a2, a3);
-
-		}
-
-		bool hkDemo_SetMetaData(unsigned int controllerIndex, __int64 metaData, unsigned int outBufferSize, __int64 metaDataSize, int info, char duration) {
-
-
-			if (!custom_title_buf.empty()) {
-
-				ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Title..." });
-
-				static std::string titleBuf = utils::decodeEncodedChars(custom_title_buf);
-
-				strncpy((char*)metaDataSize + 0x242, titleBuf.c_str(), 32);
-				*(bool*)(metaDataSize + 0x286) = true;
-				strncpy((char*)((ProcessBase + 0x197EBA00) + 0x6706EA), titleBuf.c_str(), 32);
-
-			}
-
-			if (!custom_desc_buf.empty()) {
-
-				ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Desc..." });
-
-				static std::string descBuf = utils::decodeEncodedChars(custom_desc_buf);
-
-				strncpy((char*)metaDataSize + 0x287, descBuf.c_str(), 32);
-				*(bool*)(metaDataSize + 0x307) = true;
-				strncpy((char*)((ProcessBase + 0x197EBA00) + 0x67072F), descBuf.c_str(), 32);
-
-			}
-
-			return Demo_SetMetaData(controllerIndex, metaData, outBufferSize, metaDataSize, info, duration);
-		}
-
-		bool hkFileshare_CreateMetaData(__int64 a1, FileshareMetaInfo* metaInfo, int* a3, int a4) {
-
-			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x260A141)) {
-
-				//DumpMemoryToFile((uintptr_t)metaInfo, 256, "metaData.bin");
-
-				if (!custom_title_buf.empty()) { // 32 chars max
-
-					ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Title..." });
-
-					static std::string titleBuf = utils::decodeEncodedChars(custom_title_buf);
-
-					//metaInfo.name = titleBuf.c_str();
-
-					strcpy_s(metaInfo->name, 64, titleBuf.c_str());
-					*(unsigned __int8*)(metaInfo + 0xB9) = 1;
-					//metaInfo->isModifiedName = 1;
-
-				}
-
-				if (!custom_desc_buf.empty()) { // 32 chars max
-
-					ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Desc..." });
-
-					static std::string descBuf = utils::decodeEncodedChars(custom_desc_buf);
-
-					strcpy_s(metaInfo->description, 64, descBuf.c_str());
-					*(unsigned __int8*)(metaInfo + 0xFA) = 1;
-
-				}
-			}
-
-			/*
-			* qword_197EBA00 + 0x6704A8,
-			* qword_197EBA00 + 0x687640,
-			* 0x168EBF9C
-			* 0x168EBFAD
-			*/
-
-			return Fileshare_CreateMetaData(a1, metaInfo, a3, a4);
-			/* 
-			* PS4 PDB:
-			I_strcpy(metaInfo.name, 64uLL, (const char *)(metaDataSize + 0x24A));
-			metaInfo.isModifiedName = *(_BYTE *)(metaDataSize + 0x28E);
-			I_strcpy(metaInfo.description, 64uLL, (const char *)(metaDataSize + 0x28F));
-			metaInfo.isModifiedDescription = *(_BYTE *)(metaDataSize + 0x30F);
-			metaInfo.createTime = *(_DWORD *)(metaDataSize + 0x3A0);
-			metaInfo.originID = *(_QWORD *)(metaDataSize + 0x310);
-			*
-			* PC DUMP:
-			I_strcpy(v16, 64i64, metaDataSize + 0x242); name
-			v16[64] = *(_BYTE *)(metaDataSize + 0x286); isModifiedName
-			I_strcpy(v17, 64i64, metaDataSize + 0x287); desc
-			v17[64] = *(_BYTE *)(metaDataSize + 0x307); isModifiedDesc
-			v13[0] = *(_DWORD *)(metaDataSize + 0x398); createTime
-			v12 = *(_QWORD *)(metaDataSize + 0x308);	originID
-			*/
-
-		}
-
-		void hkDemo_SaveScreenshotToContentServer(int a1, int a2) {
-
-			load_custom_jpg();
-
-			if (custom_jpg_buf)
-			{
-				if (!jpg_buf_o) {
-					jpg_buf_o = *(uint64_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8490);
-				}
-				ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Screenshot..." });
-				*(uint64_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8490) = (uint64_t)custom_jpg_buf;
-				*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8498) = custom_jpg_buf_size;
-			}
-
-			if (custom_thumb_buf) {
-				if (custom_thumb_buf_size <= 0x88000) {
-					ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Thumbnail..." });
-					DWORD oldProtect;
-
-					uintptr_t imageBufferAddress = (*(uint64_t*)(ProcessBase + 0x197EBA00)) + 0x5A84A0;
-					char* targetBuffer = reinterpret_cast<char*>(imageBufferAddress);
-					memcpy((LPVOID)targetBuffer, custom_thumb_buf, custom_thumb_buf_size);
-					*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A849C) = custom_thumb_buf_size;
-
-				}
-			}
-
-			Demo_SaveScreenshotToContentServer(a1, a2);
-			
-		}
-
-		__int64 hkFileshare_GetSummaryFileAuthorXUID(ControllerIndex_t controllerIndex, uint64_t fileID) {
-
-			return LiveUser_GetXUID((int)controllerIndex);
-		}
-
-		bool hkFileshare_CanDownloadFile(unsigned int a1, __int64 ownerXuid, int a3, __int64 fileId, bool isCommunityFile) {
-
-			if (bFileshareDownloading) return true;
-
-			return Fileshare_CanDownloadFile(a1, ownerXuid, a3, fileId, isCommunityFile);
-		}
-
-		__int64 hkLiveSteam_FilterPersonaName(char* buffer, int size, char asciionly)
-		{
-			//ImGui::InsertNotification({ ImGuiToastType::Info, 4000, "hLiveSteam_FilterPersonaName called" });
-			Unhook(oLiveSteam_FilterPersonaName, hkLiveSteam_FilterPersonaName);
-			return 0;
-		}
-
-		char* hkGetPersonaName(DWORD_PTR _this)
-		{
-
-			//ImGui::InsertNotification({ ImGuiToastType::Info, 4000, "hGetPersonaName called" });
-
-			if (spoofName[0] != 0)
-			{
-				if ((DWORD_PTR)_ReturnAddress() == pGetPersonaNameReturn)
-				{
-					Hook(oLiveSteam_FilterPersonaName, hkLiveSteam_FilterPersonaName);
-				}
-
-				return spoofName;
-			}
-
-			return oGetPersonaName(_this);
 		}
 
 		bool __fastcall ReadP2PPacket(uintptr_t thisptr, void* pub_dest, unsigned int cub_dest, unsigned int* cub_msg_size, unsigned __int64* steam_id_remote, int n_channel) {
@@ -683,6 +352,364 @@ namespace hooks {
 
 			return live_presence_pack(presence, buffer, buffer_size);
 		}
+		/***********************************************************************************/
+
+		bool hkUI_IsRenderingImmediately() {
+
+			return true;
+
+		}
+
+		void hkR_ConvertColorToBytes(ImVec4* color, byte* bytes) {
+
+			auto desiredColor = bUIRgb ? (ImVec4)mainRgb() : (ImVec4)uiColor;
+
+			void* returnAddress = _ReturnAddress();
+
+			if (bColoredUI && returnAddress != nullptr && color->w > 0.1f) {
+
+				if (returnAddress == (void*)(ProcessBase + 0x1F34A23) || returnAddress == (void*)(ProcessBase + 0x1CD998F) || returnAddress == (void*)(ProcessBase + 0x2814DC7)
+					|| returnAddress == (void*)(ProcessBase + 0x1CD92A7) || returnAddress == (void*)(ProcessBase + 0x1CD9FB3) || returnAddress == (void*)(ProcessBase + 0x228192A)) {
+					return R_ConvertColorToBytes(&desiredColor, bytes);
+				}
+
+			}
+
+			return R_ConvertColorToBytes(color, bytes);
+
+		}
+
+		unsigned int hkSteam_UserHasLicenseForApp(__int64 steamID, unsigned __int64 appID) {
+
+			ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "UserHasLicenseForApp called for %llu, returning as valid...", steamID });
+
+			return 0;
+		}
+
+		bool hkSteam_bIsDlcInstalled(__int64 vTableThisPtr, uint64_t appID) {
+
+			if (bUnlockFullGame) return true;
+
+			auto it = dlcCache.find(appID);
+			if (it != dlcCache.end()) {
+				return it->second;
+			}
+
+			bool result = Steam_bIsDlcInstalled_o(vTableThisPtr, appID);
+
+			dlcCache[appID] = result;
+
+			return result;
+
+
+		}
+
+		bool hkSteam_bIsAppInstalled(__int64 vTableThisPtr, uint64_t appID) {
+
+			if (bUnlockFullGame) return true;
+
+			auto it = appCache.find(appID);
+			if (it != appCache.end()) {
+				return it->second;
+			}
+
+			bool result = Steam_bIsAppInstalled_o(vTableThisPtr, appID);
+
+			appCache[appID] = result;
+
+			return result;
+		}
+
+		char hkUserHasLicenseForApp(__int64 mapInfo, __int64* userObj) {
+
+			__int64 xuid = *userObj;
+			//ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "UserHasLicenseForApp called for %llu, returning as valid...", xuid });
+
+			//*(DWORD*)(mapInfo + 0xC18) = 0; // Would jump to successful ownership but caused XP issues.
+
+			*((BYTE*)userObj + 13) = 1;
+			*((BYTE*)userObj + 12) |= 0;
+			*((DWORD*)userObj + 4) |= 8u;
+
+			return 1;
+
+		}
+
+		__int64 hkLiveInventory_GetItemQuantity(ControllerIndex_t controllerIndex, int itemId) {
+
+			if (itemId == 99003 && bSpoofSlots) {
+				return 1;
+			}
+
+			if (bSpoofBlackMarket) return iBlackmarketAmt;
+
+			return LiveInventory_GetItemQuantity(controllerIndex, itemId);
+
+		}
+
+		bool hkLiveInventory_AreExtraSlotsPurchased(ControllerIndex_t controllerIndex) {
+
+			if (bSpoofSlots) {
+				return true;
+			}
+			return LiveInventory_AreExtraSlotsPurchased(controllerIndex);
+		}
+
+		bool hkLiveEntitlements_IsEntitlementActiveForController(ControllerIndex_t controllerIndex, int incentiveId) {
+
+			if (bSpoofPurchases) return true;
+
+			return LiveEntitlements_IsEntitlementActiveForController(controllerIndex, incentiveId);
+
+		}
+
+		bool hkLive_UserGetName(ControllerIndex_t controllerIndex, char* buf, int bufSize) {
+
+			__int64 v3; // rbx
+			int* v6; // rax
+			int v9; // [rsp+40h] [rbp+8h] BYREF
+
+			v3 = bufSize;
+			v9 = bufSize;
+			Memset(buf, 0i64, bufSize);
+			v6 = &v9;
+
+			Live_Base_UserGetName((UINT8*)buf, *v6, 1);
+
+			return 1;
+		}
+
+		__int64 hkG_Damage(__int64 targ, __int64 inflictor, __int64 attacker, __int64 a4, __int64 a5, int damage, int a7, int a8, __int64 a9, int a10, __int64 a11, int a12, int a13, int a14, __int16 a15, int a16, __int64 a17) {
+
+			auto g_entity = *(__int64*)(ProcessBase + 0x1770D4E8);
+			auto g_entityP2 = (__int64)(g_entity + 0x4F8);
+			auto g_entityP3 = (__int64)(g_entity + 0x9F0);
+			auto g_entityP4 = (__int64)(g_entity + 0xEE8);
+			auto newDamage = (int)(damage * iDamageMultiplier);
+
+			if (LobbyTypes_GetMainMode() == LOBBY_MAINMODE_ZM) {
+
+				if (targ == g_entity || targ == g_entityP2 || targ == g_entityP3 || targ == g_entityP4) {
+
+					if (bThorns) {
+
+						if (bNukes) {
+							for (int i = 4; i < 2047; ++i) {
+								__int64 target = static_cast<__int64>(g_entity) + (0x4F8 * i);
+								spoof_call(spoof_t, G_Damage, target, targ, targ, a4, a5, (int)9999999, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
+							}
+						}
+
+						spoof_call(spoof_t, G_Damage, attacker, targ, targ, a4, a5, newDamage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
+					}
+
+					if (bGodMode) {
+						return 0;
+					}
+				}
+				else {
+					if (bDamageMultiplier) {
+						return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, newDamage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
+					}				
+
+					if (bNukes) {
+						for (int i = 4; i < 2047; ++i) {
+							__int64 target = static_cast<__int64>(g_entity) + (0x4F8 * i);
+							spoof_call(spoof_t, G_Damage, target, inflictor, attacker, a4, a5, (int)9999999, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
+						}
+					}
+				}
+			}
+
+			return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, damage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
+
+		}
+
+
+		void hkI_Strcpy(BYTE* a1, __int64 a2, const char* a3) {
+
+			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x264A547)) {
+
+				if (!custom_title_buf.empty()) {
+
+					static std::string titleBuf = utils::decodeEncodedChars(custom_title_buf);
+
+					return I_Strcpy(a1, a2, titleBuf.c_str());
+				}
+			}
+
+			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x264A580)) {
+
+				if (!custom_desc_buf.empty()) {
+
+					static std::string descBuf = utils::decodeEncodedChars(custom_desc_buf);
+
+					return I_Strcpy(a1, a2, descBuf.c_str());
+				}
+			}
+
+			return I_Strcpy(a1, a2, a3);
+
+		}
+
+		bool hkDemo_SetMetaData(unsigned int controllerIndex, __int64 metaData, unsigned int outBufferSize, __int64 metaDataSize, int info, char duration) {
+
+
+			if (!custom_title_buf.empty()) {
+
+				ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Title..." });
+
+				static std::string titleBuf = utils::decodeEncodedChars(custom_title_buf);
+
+				strncpy((char*)metaDataSize + 0x242, titleBuf.c_str(), 32);
+				*(bool*)(metaDataSize + 0x286) = true;
+				strncpy((char*)((ProcessBase + 0x197EBA00) + 0x6706EA), titleBuf.c_str(), 32);
+
+			}
+
+			if (!custom_desc_buf.empty()) {
+
+				ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Desc..." });
+
+				static std::string descBuf = utils::decodeEncodedChars(custom_desc_buf);
+
+				strncpy((char*)metaDataSize + 0x287, descBuf.c_str(), 32);
+				*(bool*)(metaDataSize + 0x307) = true;
+				strncpy((char*)((ProcessBase + 0x197EBA00) + 0x67072F), descBuf.c_str(), 32);
+
+			}
+
+			return Demo_SetMetaData(controllerIndex, metaData, outBufferSize, metaDataSize, info, duration);
+		}
+
+		bool hkFileshare_CreateMetaData(__int64 a1, FileshareMetaInfo* metaInfo, int* a3, int a4) {
+
+			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x260A141)) {
+
+				//DumpMemoryToFile((uintptr_t)metaInfo, 256, "metaData.bin");
+
+				if (!custom_title_buf.empty()) { // 32 chars max
+
+					ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Title..." });
+
+					static std::string titleBuf = utils::decodeEncodedChars(custom_title_buf);
+
+					//metaInfo.name = titleBuf.c_str();
+
+					strcpy_s(metaInfo->name, 64, titleBuf.c_str());
+					*(unsigned __int8*)(metaInfo + 0xB9) = 1;
+					//metaInfo->isModifiedName = 1;
+
+				}
+
+				if (!custom_desc_buf.empty()) { // 32 chars max
+
+					ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Desc..." });
+
+					static std::string descBuf = utils::decodeEncodedChars(custom_desc_buf);
+
+					strcpy_s(metaInfo->description, 64, descBuf.c_str());
+					*(unsigned __int8*)(metaInfo + 0xFA) = 1;
+
+				}
+			}
+
+			/*
+			* qword_197EBA00 + 0x6704A8,
+			* qword_197EBA00 + 0x687640,
+			* 0x168EBF9C
+			* 0x168EBFAD
+			*/
+
+			return Fileshare_CreateMetaData(a1, metaInfo, a3, a4);
+			/* 
+			* PS4 PDB:
+			I_strcpy(metaInfo.name, 64uLL, (const char *)(metaDataSize + 0x24A));
+			metaInfo.isModifiedName = *(_BYTE *)(metaDataSize + 0x28E);
+			I_strcpy(metaInfo.description, 64uLL, (const char *)(metaDataSize + 0x28F));
+			metaInfo.isModifiedDescription = *(_BYTE *)(metaDataSize + 0x30F);
+			metaInfo.createTime = *(_DWORD *)(metaDataSize + 0x3A0);
+			metaInfo.originID = *(_QWORD *)(metaDataSize + 0x310);
+			*
+			* PC DUMP:
+			I_strcpy(v16, 64i64, metaDataSize + 0x242); name
+			v16[64] = *(_BYTE *)(metaDataSize + 0x286); isModifiedName
+			I_strcpy(v17, 64i64, metaDataSize + 0x287); desc
+			v17[64] = *(_BYTE *)(metaDataSize + 0x307); isModifiedDesc
+			v13[0] = *(_DWORD *)(metaDataSize + 0x398); createTime
+			v12 = *(_QWORD *)(metaDataSize + 0x308);	originID
+			*/
+
+		}
+
+		void hkDemo_SaveScreenshotToContentServer(int a1, int a2) {
+
+			load_custom_jpg();
+
+			if (custom_jpg_buf)
+			{
+				if (!jpg_buf_o) {
+					jpg_buf_o = *(uint64_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8490);
+				}
+				ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Screenshot..." });
+				*(uint64_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8490) = (uint64_t)custom_jpg_buf;
+				*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8498) = custom_jpg_buf_size;
+			}
+
+			if (custom_thumb_buf) {
+				if (custom_thumb_buf_size <= 0x88000) {
+					ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Thumbnail..." });
+					DWORD oldProtect;
+
+					uintptr_t imageBufferAddress = (*(uint64_t*)(ProcessBase + 0x197EBA00)) + 0x5A84A0;
+					char* targetBuffer = reinterpret_cast<char*>(imageBufferAddress);
+					memcpy((LPVOID)targetBuffer, custom_thumb_buf, custom_thumb_buf_size);
+					*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A849C) = custom_thumb_buf_size;
+
+				}
+			}
+
+			Demo_SaveScreenshotToContentServer(a1, a2);
+			
+		}
+
+		__int64 hkFileshare_GetSummaryFileAuthorXUID(ControllerIndex_t controllerIndex, uint64_t fileID) {
+
+			return LiveUser_GetXUID((int)controllerIndex);
+		}
+
+		bool hkFileshare_CanDownloadFile(unsigned int a1, __int64 ownerXuid, int a3, __int64 fileId, bool isCommunityFile) {
+
+			if (bFileshareDownloading) return true;
+
+			return Fileshare_CanDownloadFile(a1, ownerXuid, a3, fileId, isCommunityFile);
+		}
+
+		__int64 hkLiveSteam_FilterPersonaName(char* buffer, int size, char asciionly)
+		{
+			//ImGui::InsertNotification({ ImGuiToastType::Info, 4000, "hLiveSteam_FilterPersonaName called" });
+			Unhook(oLiveSteam_FilterPersonaName, hkLiveSteam_FilterPersonaName);
+			return 0;
+		}
+
+		char* hkGetPersonaName(DWORD_PTR _this)
+		{
+
+			//ImGui::InsertNotification({ ImGuiToastType::Info, 4000, "hGetPersonaName called" });
+
+			if (spoofName[0] != 0)
+			{
+				if ((DWORD_PTR)_ReturnAddress() == pGetPersonaNameReturn)
+				{
+					Hook(oLiveSteam_FilterPersonaName, hkLiveSteam_FilterPersonaName);
+				}
+
+				return spoofName;
+			}
+
+			return oGetPersonaName(_this);
+		}
+
 
 
 	}
@@ -755,7 +782,7 @@ namespace hooks {
 		//MH_CreateHook((LPVOID)(ProcessBase + 0x143A600), functions::hkdwInstantDispatchMessage, (LPVOID*)&dwInstantDispatchMessage);
 		//MH_CreateHook((LPVOID)(ProcessBase + 0x1F34920), functions::hkUI_Interface_DrawText, (LPVOID*)&UI_Interface_DrawText);
 
-
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1980960), functions::hkG_Damage, (LPVOID*)&G_Damage);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1D1CC10), functions::hkR_ConvertColorToBytes, (LPVOID*)&R_ConvertColorToBytes);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x2705710), functions::hkUI_IsRenderingImmediately, (LPVOID*)&UI_IsRenderingImmediately);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1DF61E0), functions::hkFileshare_GetSummaryFileAuthorXUID, (LPVOID*)&Fileshare_GetSummaryFileAuthorXUID);
@@ -778,6 +805,7 @@ namespace hooks {
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1321110));		//hkCL_GetConfigString
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EF65C0));		//hkLobbyMsgRW_PackageElement
 
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980960));		//G_Damage
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1D1CC10));		//hkR_ConvertColorToBytes
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x2705710));		//hkUI_IsRenderingImmediately
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DF61E0));		//hkFileshare_GetSummaryFileAuthorXUID

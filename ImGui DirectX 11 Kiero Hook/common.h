@@ -23,6 +23,7 @@ inline DWORD_PTR HookVMT(DWORD_PTR pVtable, DWORD_PTR hook, int index)
 
 
 extern std::uintptr_t ProcessBase;
+extern const void* spoof_t;
 extern uint64_t PlayerXUID;
 extern char spoofName[32];
 extern const char* BlackMarketGuaranteeBribes[19];
@@ -47,6 +48,10 @@ extern bool bFirstGumFree;
 extern bool bFirstGumFreeRan;
 extern bool bUIRgb;
 extern bool bColoredUI;
+extern bool bGodMode;
+extern bool bThorns;
+extern bool bNukes;
+extern bool bDamageMultiplier;
 
 extern float flHue;
 extern float flSpeed;
@@ -58,6 +63,7 @@ extern ImColor mainRgb();
 extern int iBlackmarketAmt;
 extern int iBribe;
 extern int iComboBoxType;
+extern int iDamageMultiplier;
 
 typedef bool(__fastcall* send_p2p_packet_t)(unsigned __int64 xuid, char type, const void* data, unsigned int cursize);
 typedef __int64(__fastcall* LiveStats_GetRootDDLStateT)(int statThing);
@@ -118,6 +124,8 @@ extern DWORD_PTR iSteamApps;
 //const static auto BG_UnlockablesIsItemLocked = reinterpret_cast<bool(__fastcall*)(eModes mode, ControllerIndex_t controllerIndex, int itemindex)>(ProcessBase + 0x26A8F60);
 //const static auto BG_UnlockablesIsItemValidNotNull = reinterpret_cast<bool(__fastcall*)(eModes mode, int itemindex)>(ProcessBase + 0x26A9920);
 //const static auto BG_UnlockablesIsItemDLCAvailable = reinterpret_cast<bool(__fastcall*)(eModes mode, ControllerIndex_t controllerIndex, int itemindex)>(ProcessBase + 0x26A8B80);
+const static auto G_Damage = reinterpret_cast<__int64(__fastcall*)(__int64 targ, __int64 inflictor, __int64 attacker, __int64 a4, __int64 a5, int a6, int a7, int a8, __int64 a9, int a10, __int64 a11, int a12, int a13, int a14, __int16 a15, int a16, __int64 a17)>(ProcessBase + 0x1980960);
+
 const static auto BG_UnlockablesGetItemName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex)>(ProcessBase + 0x26A71F0);
 const static auto BG_UnlockablesGetItemAttachmentDisplayName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex, int attachmentNum)>(ProcessBase + 0x26A6410);
 const static auto BG_UnlockablesClearWeaponOptionNew = reinterpret_cast<const char* (__fastcall*)(eModes eMode, ControllerIndex_t, int itemIndex, int xp)>(ProcessBase + 0x26A2E30);
@@ -128,6 +136,7 @@ const static auto CG_BoldGameMessageCenter = reinterpret_cast<std::uintptr_t(__f
 const static auto Com_IsInGame = reinterpret_cast<bool(*)()>(ProcessBase + 0x21482C0);
 const static auto Com_SessionMode_GetMode = reinterpret_cast<eModes(__cdecl*)()>(ProcessBase + 0x20F6D30);
 const static auto Com_SessionMode_GetGameMode = reinterpret_cast<eGameModes(__cdecl*)()>(ProcessBase + 0x20F68B0);
+const static auto LiveStats_ResetStats = reinterpret_cast<__int64(__fastcall*)(eModes mode, int controllerIndex, bool versionChanged, statsResetReason_t reason)>(ProcessBase + 0x1EA4E80);
 const static auto LiveStats_Loadouts_GetCACTypeForMode = reinterpret_cast<CACType(__fastcall*)(__int64 sessionMode, __int64 gameMode)>(ProcessBase + 0x1EAF0B0);
 const static auto LiveStats_ClassSets_GetClassSetTypeForMode = reinterpret_cast<ClassSetType_t(__fastcall*)( eModes gameMode, eGameModes sessionMode )>(ProcessBase + 0x1EA9260);
 const static auto LiveStats_Loadouts_GetCACRoot = reinterpret_cast<CACRoot*(__fastcall*)(CACRoot* CacRoot, int ControllerIndex, int CacType)>(ProcessBase + 0x1EAF090);
@@ -171,6 +180,7 @@ const static auto MSG_ReadData = reinterpret_cast<void(*)(msg_t*, void*, int)>(P
 const static auto MSG_InfoResponse = reinterpret_cast<bool(*)(void*, LobbyMsg*)>(ProcessBase + 0x1EE1E60);
 const static auto Live_IsUserSignedInToDemonware = reinterpret_cast<bool(*)(const ControllerIndex_t)>(ProcessBase + 0x1E0D7A0);
 const static auto LiveUser_GetXUID = reinterpret_cast<__int64(__fastcall*)(int)>(ProcessBase + 0x1EC7310);
+const static auto LobbyTypes_GetMainMode = reinterpret_cast<LobbyMainMode(__cdecl*)()>(ProcessBase + 0x1EEBCB0);
 const static auto LobbyMsgRW_PrepReadData = reinterpret_cast<bool(__fastcall*)(LobbyMsg*, char*, int)>(ProcessBase + 0x1EF69C0);
 const static auto LobbyMsgRW_PrepWriteMsg = reinterpret_cast<bool(__fastcall*)(LobbyMsg*, char*, int, MsgType)>(ProcessBase + 0x1EF6A30);
 const static auto LobbyMsgRW_PrepReadMsg = reinterpret_cast<bool(__fastcall*)(LobbyMsg*, msg_t*)>(ProcessBase + 0x1EF69F0);

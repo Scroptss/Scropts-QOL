@@ -55,10 +55,15 @@ bool bFirstGumFree = true;
 bool bFirstGumFreeRan;
 bool bUIRgb;
 bool bColoredUI;
+bool bGodMode;
+bool bThorns;
+bool bNukes;
+bool bDamageMultiplier;
 
 int iBlackmarketAmt = 999;
 int iBribe;
 int iComboBoxType = 0;
+int iDamageMultiplier = 1;
 
 float flHue;
 float flSpeed = 3.0f;
@@ -99,7 +104,6 @@ LiveStats_SetShowcaseWeaponT LiveStats_SetShowcaseWeapon = (LiveStats_SetShowcas
 LiveStats_SetCharacterHeadIndexT LiveStats_SetCharacterHeadIndex = (LiveStats_SetCharacterHeadIndexT)(ProcessBase + 0x1EACD70);
 lergstuffT lergstuff = (lergstuffT)(ProcessBase + 0x1C4D70);
 send_p2p_packet_t send_p2p_packet = reinterpret_cast<send_p2p_packet_t>(OFFSET(0x1EB01C0));
-uintptr_t spoofAddr = 0;
 LootT GiveLootToSelf = (LootT)(ProcessBase + 0x1E82C50);
 GameSendServerCommandT SV_GameSendServerCommand = (GameSendServerCommandT)(ProcessBase + 0x224F580);
 live_presence_pack_t live_presence_pack = (live_presence_pack_t)(ProcessBase + 0x1E93CE0);

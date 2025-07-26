@@ -27,8 +27,10 @@ bool bLoginReward;
 bool bDiviniumSpend;
 bool bCrypto;
 bool bCryptoSpend;
+bool bProtectStats;
+bool bProtectStatsRan;
 int UnlockTMR = clock();
-std::string version = "2.1.9";
+std::string version = "2.2.0";
 
 int minRank = 0;
 static int icon = 0;
@@ -40,7 +42,7 @@ static int paragonRankXp = 0;
 
 static int map = 0;
 static int setRound = 0;
-
+uintptr_t spoofAddr = 0;
 
 static void HelpMarker(const char* desc)
 {
@@ -82,6 +84,52 @@ bool should_ignore_msg(UINT msg)
 		return false;
 	}
 }
+
+BOOLEAN MaskCompare(uintptr_t buffer, LPCSTR pattern, LPCSTR mask) {
+	for (auto b = reinterpret_cast<PBYTE>(buffer); *mask; ++pattern, ++mask, ++b) {
+		if (*mask == 'x' && *reinterpret_cast<LPCBYTE>(pattern) != *b) {
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
+uintptr_t FindSpoof()
+{
+
+	if (spoofAddr <= 0) {
+		MODULEINFO info = { 0 };
+		GetModuleInformation(GetCurrentProcess(), GetModuleHandle(0), &info, sizeof(info));
+
+		bool found = false;
+		while (!found) {
+			PVOID base = info.lpBaseOfDll;
+			DWORD size = info.SizeOfImage;
+			LPCSTR pattern = "\xFF\x26";
+			LPCSTR mask = "xx";
+
+			size -= static_cast<DWORD>(strlen(mask));
+
+			for (auto i = 0UL; i < size; ++i) {
+				auto addr = reinterpret_cast<uintptr_t>(base) + i;
+				if (MaskCompare(addr, pattern, mask)) {
+					uintptr_t relative = addr - ProcessBase;
+					if (relative < (uintptr_t)(ProcessBase + 0x2000000))
+						if (MaskCompare((uintptr_t)(addr - 0x2), "\xFF", "x") || MaskCompare((uintptr_t)(addr - 0x3), "\xFF", "x") || MaskCompare((uintptr_t)(addr - 0x3), "\xFF", "x") || MaskCompare((uintptr_t)(addr - 0x4), "\xFF", "x") || MaskCompare((uintptr_t)(addr - 0x5), "\xE8", "x") || MaskCompare((uintptr_t)(addr - 0x6), "\xFF", "x") || MaskCompare((uintptr_t)(addr - 0x7), "\xFF", "x")) {
+							spoofAddr = addr;
+							return addr;
+						}
+				}
+			}
+		}
+
+		return 0;
+	}
+	return spoofAddr;
+}
+
+const void* spoof_t = (const void*)FindSpoof();
 
 bool is_user_in_game()
 {
@@ -2682,27 +2730,49 @@ void draw() {
 				LiveStorage_UploadStatsForController(0);
 			}
 
+			ImGui::SameLine();
+
 			if (ImGui::Button("Max Stats")) {
 				setStats();
 				setChallenges();
 				unlockSpecialistOutfits();
 				setMaxTokens();
+				LiveStorage_UploadStatsForController(0);
+			}
+
+			ImGui::Checkbox("Freeze Stats", &bProtectStats);
+
+			ImGui::SameLine();
+
+			HelpMarker("Enable this to freeze your stats and disable the 'To protect your stats you have been kicked to the main menu' error. Useful for reverting buggy MP stat edits. Disable before fresh restarts.");
+
+			if (bProtectStats && !bProtectStatsRan) {
+				Dvar_SetFromString("tu10_validationFatal", "0", true);
+				bProtectStatsRan = true;
+			}
+
+			if (!bProtectStats && bProtectStatsRan) {
+				Dvar_SetFromString("tu10_validationFatal", "1", true);
+				bProtectStatsRan = false;
 			}
 
 			if (ImGui::Button("Unlock All Class Slots")) {
 
 				unlockClassSlots();
+				LiveStorage_UploadStatsForController(0);
 			}
 
 			if (ImGui::Button("Max Unlock Tokens")) {
 
 				setMaxTokens();
+				LiveStorage_UploadStatsForController(0);
 			}
 
 			if (ImGui::Button("Max Weapons")) {
 
 				setMaxWeapons();
 				setGroupStats();
+				LiveStorage_UploadStatsForController(0);
 
 			}
 
@@ -2771,14 +2841,6 @@ void draw() {
 				ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Client");
 			}
 
-			/*static std::string logStr;
-
-			ImGui::InputText("Log", &logStr);
-
-			if (ImGui::Button("Send Log")) {
-				hooks::nlog(L"%s", logStr.c_str());
-			}*/
-
 			ImGui::Checkbox("Force Host", &bForceHost);
 
 			if (bForceHost && !bForceHostRan) {
@@ -2829,10 +2891,12 @@ void draw() {
 
 			HelpMarker("Relive the OG days where the first gobblegum wasn't free!");
 
-			if (ImGui::Button("Activate Gobblegum Challenge")) {
-				Dvar_SetFromString("ui_enablePromoMenu", "1", true);
-				Dvar_SetFromString("ui_enableZMHDFeaturedCard", "1", true);
-				ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "Successfully activated Gobblegum Challenge.\nCheck it out in the contracts section to redeem rewards!" });
+			if (ImGui::Button("Fast Restart Map")) {
+				Cbuf_AddText(0, "fast_restart");
+			}
+
+			if (ImGui::Button("Full Restart Map")) {
+				Cbuf_AddText(0, "map_restart");
 			}
 
 			if (ImGui::Button("No Teddy Bear")) {
@@ -2840,6 +2904,17 @@ void draw() {
 				Dvar_SetFromString("magic_chest_movable", "0", false);
 				Dvar_SetFromString("sv_cheats", "0", false);
 			}
+
+			ImGui::Checkbox("God Mode##DMG", &bGodMode);
+			//ImGui::SameLine();
+			ImGui::Checkbox("Thorns Mode##DMG", &bThorns);
+			//ImGui::SameLine();
+			ImGui::Checkbox("Nukes Mode##DMG", &bNukes);
+			//ImGui::SameLine();
+			ImGui::Checkbox("##DMG", &bDamageMultiplier);
+
+			ImGui::SameLine();
+			ImGui::SliderInt("DMG Multiplier", &iDamageMultiplier, 1, 100);
 
 			ImGui::Separator();
 
@@ -3077,6 +3152,11 @@ void draw() {
 			HelpMarker("Grants you a free pack of Gobblegums once");
 
 
+			if (ImGui::Button("Free Gobblegum Challenge")) {
+				Dvar_SetFromString("ui_enablePromoMenu", "1", true);
+				Dvar_SetFromString("ui_enableZMHDFeaturedCard", "1", true);
+				ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "Successfully activated Gobblegum Challenge.\nCheck it out in the contracts section to redeem rewards!" });
+			}
 
 			static int chosenBackground;
 
