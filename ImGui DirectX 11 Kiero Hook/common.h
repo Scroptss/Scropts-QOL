@@ -125,6 +125,9 @@ extern DWORD_PTR iSteamApps;
 //const static auto BG_UnlockablesIsItemValidNotNull = reinterpret_cast<bool(__fastcall*)(eModes mode, int itemindex)>(ProcessBase + 0x26A9920);
 //const static auto BG_UnlockablesIsItemDLCAvailable = reinterpret_cast<bool(__fastcall*)(eModes mode, ControllerIndex_t controllerIndex, int itemindex)>(ProcessBase + 0x26A8B80);
 const static auto G_Damage = reinterpret_cast<__int64(__fastcall*)(__int64 targ, __int64 inflictor, __int64 attacker, __int64 a4, __int64 a5, int a6, int a7, int a8, __int64 a9, int a10, __int64 a11, int a12, int a13, int a14, __int16 a15, int a16, __int64 a17)>(ProcessBase + 0x1980960);
+const static auto CL_ConnectionlessCMD = reinterpret_cast<bool(__fastcall*)(int clientNum, netadr_t *from, msg_t *msg)>(ProcessBase + 0x134CD50);
+const static auto Msg_ReadStringLine = reinterpret_cast<char*(__fastcall*)(msg_t* msg, char* string, int maxChars)>(ProcessBase + 0x2157140);
+const static auto Sys_GetTLS = reinterpret_cast<__int64(__fastcall*)()>(ProcessBase + 0x21837B0);
 
 const static auto BG_UnlockablesGetItemName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex)>(ProcessBase + 0x26A71F0);
 const static auto BG_UnlockablesGetItemAttachmentDisplayName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex, int attachmentNum)>(ProcessBase + 0x26A6410);
@@ -263,3 +266,4 @@ extern std::string offhandPreviews[8];
 extern int offhandSelectedItems[8];
 extern int offhandSelectedSlot[8];
 
+extern std::vector<std::string> legit_packets;

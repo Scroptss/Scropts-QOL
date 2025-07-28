@@ -619,10 +619,6 @@ void UnlockAllAccolades() {
 			DDL_MoveToPath(tmp, result, 5, path);
 			DDL_SetUInt((__int64)result, a1, 1);
 			ZeroMemory(result, size(result));
-			path[4] = "StatValue";
-			DDL_MoveToPath(tmp, result, 5, path);
-			DDL_SetUInt((__int64)result, a1, 10000);
-			ZeroMemory(result, size(result));
 		}
 	}
 	LiveStorage_UploadStatsForController(0);
@@ -3409,6 +3405,10 @@ void draw() {
 
 			if (ImGui::Button("Apply Hooks")) {
 				hooks::applyPatches();
+			}
+
+			if (ImGui::Button("Back to Main Menu")) {
+				Cbuf_AddText(0, "disconnect");
 			}
 
 

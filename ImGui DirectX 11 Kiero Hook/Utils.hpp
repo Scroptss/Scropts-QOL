@@ -42,6 +42,16 @@ namespace utils {
 		return "ended";
 	}
 
+	FORCEINLINE bool is_in_array(std::string cmp1, std::vector<std::string> cmp2)
+	{
+		for (auto& cmp : cmp2)
+		{
+			if (!strcmp(cmp1.data(), cmp.data()))
+				return true;
+		}
+		return false;
+	}
+
 	FORCEINLINE bool is_in_number_array(int cmp1, std::vector<int> cmp2)
 	{
 		for (auto cmp : cmp2)

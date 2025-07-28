@@ -337,3 +337,21 @@ const char* slots[] = {
     "killStreak4"
 };
 
+std::vector<std::string> legit_packets = { 
+"loadingNewMap",
+"connectResponse",
+"statresponse",
+"LM",
+"disconnect",
+"loadoutResponse",
+"infoResponse",
+"statusResponse",
+"keyAuthorize",
+"error",
+"print",
+"fastrestart",
+"ping",
+"pinga",
+"steamAuthReq",
+"cfl" };
+

@@ -121,7 +121,19 @@ namespace hooks {
 			return CL_GetConfigString(configStringIndex);
 		}
 
+		bool hkCL_ConnectionlessCMD(int clientNum, netadr_t* from, msg_t* msg) {
+
+			auto v7 = *(int**)(Sys_GetTLS() + 24);
+			auto v8 = *v7;
+			auto message = **(CHAR***)&v7[2 * v8 + 34];			
 		
+			if (utils::is_in_array(message, legit_packets)) {
+				return CL_ConnectionlessCMD(clientNum, from, msg);
+			}
+			ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "Invalid OOB recieved: %s", message});
+			return 1;
+		}
+
 		bool hkLobbyMsgRW_PackageElement(LobbyMsg* lobbyMsg, bool addElement) {
 
 			auto should_ignore = lobbyMsg->msg.overflowed;
@@ -763,6 +775,13 @@ namespace hooks {
 
 	void onFrame() {
 
+		if (!Live_IsUserInGame(0) && Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0)) {
+			Dvar_SetFromString("groupCountsVisible", "1", true);
+			Dvar_SetFromString("groupZeroCountsVisible", "1", true);
+			Dvar_SetFromString("groupDownloadInterval", "1", true);
+			Dvar_SetFromString("groupUploadInterval", "1", true);
+		}
+
 		static bool dispatch_enabled = false;
 
 		if (!dispatch_enabled && Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0))
@@ -778,6 +797,7 @@ namespace hooks {
 		 //Patches 
 
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1321110), functions::hkCL_GetConfigString, (LPVOID*)&CL_GetConfigString);
+		MH_CreateHook((LPVOID)(ProcessBase + 0x134CD50), functions::hkCL_ConnectionlessCMD, (LPVOID*)&CL_ConnectionlessCMD);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1321110), functions::hkLobbyMsgRW_PackageElement, (LPVOID*)&LobbyMsgRW_PackageElement);
 		//MH_CreateHook((LPVOID)(ProcessBase + 0x143A600), functions::hkdwInstantDispatchMessage, (LPVOID*)&dwInstantDispatchMessage);
 		//MH_CreateHook((LPVOID)(ProcessBase + 0x1F34920), functions::hkUI_Interface_DrawText, (LPVOID*)&UI_Interface_DrawText);
@@ -803,6 +823,7 @@ namespace hooks {
 		// Patches
 
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1321110));		//hkCL_GetConfigString
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x134CD50));		//hkCL_ConnectionlessCMD
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EF65C0));		//hkLobbyMsgRW_PackageElement
 
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980960));		//G_Damage
