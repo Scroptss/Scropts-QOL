@@ -30,7 +30,7 @@ bool bCryptoSpend;
 bool bProtectStats;
 bool bProtectStatsRan;
 int UnlockTMR = clock();
-std::string version = "2.2.0";
+std::string version = "2.2.1";
 
 int minRank = 0;
 static int icon = 0;
