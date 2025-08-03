@@ -79,30 +79,10 @@ namespace hooks {
 
 	}
 
-	void nlog(const wchar_t* str, ...)
-	{
-		va_list ap;
-		HWND notepad, edit;
-		wchar_t buf[256];
-
-		va_start(ap, str);
-		vswprintf(buf, str, ap);
-		va_end(ap);
-		wcscat(buf, L"\r\n");
-		notepad = FindWindowW(NULL, L"Untitled - Notepad");
-		if (!notepad)
-		{
-			notepad = FindWindowW(NULL, L"*Untitled - Notepad");
-		}
-		edit = FindWindowExW(notepad, NULL, L"EDIT", NULL);
-		SendMessage(edit, EM_REPLACESEL, TRUE, (LPARAM)buf);
-	}
-
 	namespace functions {
 
 		// Patches 
 
-		// Loadside Crash
 		const char* __fastcall hkCL_GetConfigString(std::int32_t configStringIndex)
 		{
 
@@ -364,7 +344,6 @@ namespace hooks {
 
 			return live_presence_pack(presence, buffer, buffer_size);
 		}
-		/***********************************************************************************/
 
 		bool hkUI_IsRenderingImmediately() {
 
@@ -389,13 +368,6 @@ namespace hooks {
 
 			return R_ConvertColorToBytes(color, bytes);
 
-		}
-
-		unsigned int hkSteam_UserHasLicenseForApp(__int64 steamID, unsigned __int64 appID) {
-
-			ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "UserHasLicenseForApp called for %llu, returning as valid...", steamID });
-
-			return 0;
 		}
 
 		bool hkSteam_bIsDlcInstalled(__int64 vTableThisPtr, uint64_t appID) {
@@ -434,17 +406,11 @@ namespace hooks {
 
 		char hkUserHasLicenseForApp(__int64 mapInfo, __int64* userObj) {
 
-			__int64 xuid = *userObj;
-			//ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "UserHasLicenseForApp called for %llu, returning as valid...", xuid });
-
-			//*(DWORD*)(mapInfo + 0xC18) = 0; // Would jump to successful ownership but caused XP issues.
-
 			*((BYTE*)userObj + 13) = 1;
 			*((BYTE*)userObj + 12) |= 0;
 			*((DWORD*)userObj + 4) |= 8u;
 
 			return 1;
-
 		}
 
 		__int64 hkLiveInventory_GetItemQuantity(ControllerIndex_t controllerIndex, int itemId) {
@@ -536,7 +502,6 @@ namespace hooks {
 			return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, damage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
 
 		}
-
 
 		void hkI_Strcpy(BYTE* a1, __int64 a2, const char* a3) {
 
@@ -722,8 +687,6 @@ namespace hooks {
 			return oGetPersonaName(_this);
 		}
 
-
-
 	}
 
 	void initPointerSwaps() {
@@ -734,7 +697,6 @@ namespace hooks {
 		
 		Steam_bIsDlcInstalled_o = (decltype(&functions::hkSteam_bIsDlcInstalled))(*(__int64*)(*(__int64*)iSteamApps + 48i64));
 		Steam_bIsAppInstalled_o = (decltype(&functions::hkSteam_bIsAppInstalled))(*(__int64*)(*(__int64*)iSteamApps + 56i64));
-		//Steam_bIsAppInstalled_o = (decltype(&functions::hkSteam_UserHasLicenseForApp))(*(__int64*)(*(__int64*)iSteamApps + 256i64));
 
 		// Replace the vtable pointers
 		*(__int64*)(*(__int64*)iSteamApps + 48i64) = (__int64)functions::hkSteam_bIsDlcInstalled;

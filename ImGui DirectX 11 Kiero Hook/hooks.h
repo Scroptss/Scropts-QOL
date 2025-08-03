@@ -3,14 +3,6 @@
 
 namespace hooks {
 
-    void nlog(const wchar_t* str, ...);
-
-    namespace functions {
-
-        unsigned int hkSteam_UserHasLicenseForApp(__int64 steamID, unsigned __int64 appID);
-
-    }
-
     extern DWORD_PTR pUserData;
     extern DWORD_PTR pNameBuffer;
 
