@@ -33,7 +33,7 @@ bool bProtectStats;
 bool bProtectStatsRan;
 bool bCompleteEE;
 int UnlockTMR = clock();
-std::string version = "2.3.0";
+std::string version = "2.3.1";
 
 int minRank = 0;
 static int icon = 0;
