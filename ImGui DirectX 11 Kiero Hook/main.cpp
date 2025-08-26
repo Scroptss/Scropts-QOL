@@ -29,16 +29,21 @@ bool bCrypto;
 bool bCryptoSpend;
 bool bProtectStats;
 bool bProtectStatsRan;
+bool bCompleteEE;
 int UnlockTMR = clock();
-std::string version = "2.2.1";
+std::string version = "2.2.2";
 
 int minRank = 0;
 static int icon = 0;
 static int rankXp = 0;
+static int currentRank = 0;
+static int currentLevel = 0;
+static int maxXp = 0;
 static int pLevel = 0;
 static int pPrestige = 0;
 static int ParagonRank = 36;
 static int paragonRankXp = 0;
+auto ranklevels = {0};
 
 static int map = 0;
 static int setRound = 0;
@@ -676,6 +681,50 @@ void CompleteAllMissions() {
 
 
 // MP
+
+std::vector<std::string> tokenize(const std::string& text, char delimiter)
+{
+	std::vector<std::string> buf;
+	std::stringstream ss(text);
+	std::string item;
+
+	while (std::getline(ss, item, delimiter))
+	{
+		buf.push_back(item);
+	}
+
+	return buf;
+}
+
+const char** vector_to_pointer_array(const std::vector<std::string>& strings)
+{
+	std::vector<const char*> buf;
+	buf.clear();
+
+	for (auto& str : strings)
+	{
+		buf.push_back(str.c_str());
+	}
+
+	return buf.data();
+}
+
+void ddl_set_for_path( __int64 state, __int64 context, std::string path, std::uint32_t value)
+{
+	auto ddl_path = tokenize(path, '.');
+	char result[2000];
+
+	DDL_MoveToPath(state, result, ddl_path.size(), vector_to_pointer_array(ddl_path));
+	DDL_SetUInt(state, context, value);
+}
+
+void set_stat_from_path(eModes mode, std::string path, std::uint32_t value)
+{
+	auto ddl_state = LiveStats_GetRootDDLState(mode);
+	auto ddl_context = GetStatsBuffer(0);
+
+	ddl_set_for_path(ddl_state, ddl_context, path, value);
+}
 
 void setGroupStats() {
 
@@ -2027,7 +2076,7 @@ void setStats() {
 	char result[2000];
 	int amount = 500000;
 
-	amount = rand() % (10001 - 1000) + 10001;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
 	path[2] = "statValue";
 	path[1] = "total_games_played";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2038,7 +2087,7 @@ void setStats() {
 	DDL_SetUInt((__int64)result, a1, amount);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (500 - 100) + 500;
+	/*amount = rand() % (500 - 100) + 500;
 	path[2] = "statValue";
 	path[1] = "highest_round_reached";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2047,9 +2096,9 @@ void setStats() {
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
 	DDL_SetUInt((__int64)result, a1, amount);
-	ZeroMemory(result, sizeof(result));
+	ZeroMemory(result, sizeof(result));*/
 
-	amount = rand() % (1000000 - 100000) + 1000000;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
 	path[2] = "statValue";
 	path[1] = "time_played_total";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2071,7 +2120,8 @@ void setStats() {
 	DDL_SetUInt((__int64)result, a1, amount);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (500000 - 50000) + 500000;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
+
 	path[2] = "statValue";
 	path[1] = "score";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2081,7 +2131,8 @@ void setStats() {
 	DDL_SetUInt((__int64)result, a1, amount);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (30000 - 10000) + 30000;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
+
 	path[2] = "statValue";
 	path[1] = "kills";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2091,7 +2142,8 @@ void setStats() {
 	DDL_SetUInt((__int64)result, a1, amount);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (50000 - 30000) + 100000;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
+
 	path[2] = "statValue";
 	path[1] = "deaths";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2102,7 +2154,8 @@ void setStats() {
 	DDL_SetUInt((__int64)result, a1, amount);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (50000 - 30000) + 50000;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
+
 	path[2] = "statValue";
 	path[1] = "headshots";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2113,7 +2166,8 @@ void setStats() {
 	DDL_SetUInt((__int64)result, a1, amount);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (10 - 5) + 10;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
+
 	path[2] = "statValue";
 	path[1] = "wlratio";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2124,7 +2178,8 @@ void setStats() {
 	DDL_SetUInt((__int64)result, a1, amount);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (5 - 3) + 5;
+	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
+
 	path[2] = "statValue";
 	path[1] = "kdratio";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -2286,6 +2341,54 @@ void setMapStat(int map, int round) {
 	DDL_SetUInt((__int64)result, a1, round);
 	ZeroMemory(result, sizeof(result));
 	LiveStorage_UploadStatsForController(0);
+}
+
+void setMapEE(int map, bool all) {
+
+	if (all) {
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_super_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_super_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_super_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_super_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_super_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_genesis_ee", 1);
+		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.DARKOPS_GENESIS_SUPER_EE", 1);
+
+		switch (map) {
+		case 0:
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_ee", 1);
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_super_ee", 1);
+			break;
+		case 1:
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_ee", 1);
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_super_ee", 1);
+			break;
+		case 2:
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_ee", 1);
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_super_ee", 1);
+			break;
+		case 3:
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_ee", 1);
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_super_ee", 1);
+			break;
+		case 4:
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_ee", 1);
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_super_ee", 1);
+			break;
+		case 5:
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_genesis_ee", 1);
+			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.DARKOPS_GENESIS_SUPER_EE", 1);
+			break;
+		default:
+			ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "Selected map does not track EE completion." });
+			break;
+		}
+	}
 }
 
 void setMaxMapStats() {
@@ -2569,6 +2672,155 @@ void setClassName(int classSetIndex, int classIndex, std::string className) {
 }
 
 
+// Dummy engine API placeholders (replace with your actual engine calls)
+namespace Engine {
+	enum Mode { MODE_MULTIPLAYER, MODE_ZOMBIES };
+
+	eModes CurrentSessionMode() {
+		return Com_SessionMode_GetMode();
+	}
+
+	void Exec(const std::string& cmd) {
+		// Replace with your engine exec function
+		Cbuf_AddText(0, cmd.c_str());
+		printf("Exec: %s\n", cmd.c_str());
+	}
+
+	void ExecNow(const std::string& cmd) {
+		// Replace with your engine exec function
+		Cbuf_AddText(0, cmd.c_str());
+	}
+}
+
+// Dummy Prestige Utility
+namespace PrestigeUtility {
+	int GetCurrentPLevel(int controller, eModes mode) {
+		return currentLevel; // Example
+	}
+}
+
+// Dummy BlackMarket Utility
+namespace BlackMarketUtility {
+	int GetCurrentRank(int controller) {
+		return currentRank; // Example
+	}
+}
+
+struct Option {
+	std::string name;
+	int value;
+};
+
+// Example UI function
+void ShowPrestigeRankUI(int controller) {
+	int currentPrestige = PrestigeUtility::GetCurrentPLevel(controller, Engine::CurrentSessionMode());
+	int currentPlayerLevel = BlackMarketUtility::GetCurrentRank(controller) + 1;
+	auto mode = Com_SessionMode_GetMode();
+
+	bool isMasterPrestige = (currentPrestige == 11);
+	int maxLevel = 0;
+	int minLevel = 0;
+
+	std::vector<int> rankLevels;
+	std::vector<int> XPLevels;
+	if (mode == MODE_MULTIPLAYER) {
+		if (!isMasterPrestige) {
+			rankLevels = { 1,5,10,15,20,25,30,35,40,45,50,55 };
+			XPLevels = { 4000, 26000, 67200 , 127200, 207200, 307200, 427200, 573200, 749200, 955200, 1191200, 1457200 };
+		}
+		else {
+			rankLevels = { 56,100,200,300,400,500,600,700,800,900,1000 };
+			XPLevels = {};
+		}
+	}
+	else if (mode == MODE_ZOMBIES) {
+		if (!isMasterPrestige)
+			rankLevels = { 1,5,10,15,20,25,30,35 };
+		else
+			rankLevels = { 36,100,200,300,400,500,600,700,800,900,1000 };
+	}
+	if (!rankLevels.empty()) {
+		maxLevel = *std::max_element(rankLevels.begin(), rankLevels.end());
+		minLevel = *std::min_element(rankLevels.begin(), rankLevels.end());
+	}
+
+	// ---------------- PRESTIGE SELECTOR ----------------
+	static int prestigeSelection = currentPrestige;
+	currentRank = prestigeSelection;
+	if (ImGui::BeginCombo("Prestige", std::to_string(prestigeSelection).c_str())) {
+		for (int p = 0; p <= 11; p++) {
+			bool isSelected = (prestigeSelection == p);
+			if (ImGui::Selectable(std::to_string(p).c_str(), isSelected)) {
+				prestigeSelection = p;
+				currentLevel = prestigeSelection;
+				setPrestige(prestigeSelection);
+
+				if (prestigeSelection == 11) {
+					auto prestigeStatsMaster = std::string("PrestigeStatsMaster ") + std::to_string(Engine::CurrentSessionMode());
+					Cbuf_AddText(0, prestigeStatsMaster.c_str());
+
+				}
+
+				auto label = std::string("hasprestiged ") + (prestigeSelection > 0 ? "1" : "0");
+				Cbuf_AddText(0, label.c_str());
+
+				LiveStorage_UploadStatsForController(0);
+			}
+		}
+		ImGui::EndCombo();
+	}
+
+	// ---------------- RANK LEVEL SELECTOR ----------------
+	static int rankSelection = currentRank;
+	if (ImGui::BeginCombo("Rank Level", std::to_string(rankSelection).c_str())) {
+		for (int lvl : rankLevels) {
+			bool isSelected = (rankSelection == lvl);
+			if (ImGui::Selectable(std::to_string(lvl).c_str(), isSelected)) {
+				rankSelection = lvl;
+				currentRank = lvl;
+
+				// ---- Apply Rank Logic ----
+				int rank = rankSelection;
+				int maxXp = 0;
+
+				if (currentPrestige <= 10) {
+					// Non-master prestige logic
+					if (mode == Engine::MODE_MULTIPLAYER) {
+						if (rank == maxLevel) maxXp += 55600;
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_RANK, rank - 1);
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_RANKXP, maxXp);
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_PARAGONRANKXP, 0);
+					}
+					else if (mode == Engine::MODE_ZOMBIES) {
+						if (rank == maxLevel) maxXp += 54244;
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_RANK, rank - 1);
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_RANKXP, maxXp);
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_PARAGONRANKXP, 0);
+					}
+				}
+				else {
+					// Master prestige logic
+					if (mode == Engine::MODE_MULTIPLAYER) {
+						if (rank == maxLevel) maxXp += 55600;
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_PARAGONRANK, rank - 56);
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_PARAGONRANKXP, maxXp);
+					}
+					else if (mode == Engine::MODE_ZOMBIES) {
+						if (rank == maxLevel) maxXp += 54244;
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_PARAGONRANK, rank - 36);
+						LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, playerStatsKeyIndex_t::MP_PLAYERSTATSKEY_PARAGONRANKXP, maxXp);
+					}
+				}
+
+				LiveStorage_UploadStatsForController(0);
+			}
+		}
+		ImGui::EndCombo();
+	}
+}
+
+
+
 void draw() {
 
 	RECT desktop;
@@ -2654,10 +2906,7 @@ void draw() {
 
 			ImGui::Dummy(ImVec2(0, 5));
 
-			auto currentMode = Com_SessionMode_GetMode();
-			minRank = 36;
-
-			if (currentMode == eModes::MODE_MULTIPLAYER) minRank = 56;
+			auto mode = Com_SessionMode_GetMode();
 
 			ImGui::BeginChild("##RANKING", ImGui::GetContentRegionAvail());
 
@@ -2668,65 +2917,8 @@ void draw() {
 
 			ImGui::SameLine();
 			HelpMarker("Enable before start screen to permanently unlock the watermelon camo!");
-
-			// Prestige
-			if (ImGui::Button("Send##PRESTIGE")) {
-				setPrestige(pPrestige);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Prestige ##RANK", &pPrestige, 0, 11);
-
-			// Level
-			if (ImGui::Button("Send##LEVEL")) {
-				setpLevel(pLevel);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Level ##RANK", &pLevel, 0, 54);
-
-			// XP
-			if (ImGui::Button("Send##XP")) {
-				setpLevelXP(rankXp);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("XP##RANK", &rankXp, 0, 1457200);
-
-			// Paragon Rank
-			if (ImGui::Button("Send##PRESTIGEMASTERRANK")) {
-				setMasterRank(ParagonRank);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Prestige Rank##RANK", &ParagonRank, minRank, 1000);
-
-			// Paragon XP
-			if (ImGui::Button("Send##PRESTIGEMASTERXP")) {
-				setMasterXP(paragonRankXp);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Prestige Master XP##RANK", &paragonRankXp, 0, 52542000);
-
-			// Paragon Icon
-			if (ImGui::Button("Send##PRESTIGEMASTERICON")) {
-				LiveStats_SetStatByKey(currentMode, CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Prestige Master Icon##RANK", &icon, 0, 55);			
-
-
-			if (ImGui::Button("Send All")) {
-
-				setAllRanks();
-				LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
-
-				LiveStorage_UploadStatsForController(0);
-			}
-
-			ImGui::SameLine();
+								
+			ShowPrestigeRankUI(0);				
 
 			if (ImGui::Button("Max Stats")) {
 				setStats();
@@ -2918,10 +3110,15 @@ void draw() {
 			ImGui::BulletText("Map Stat Editor");
 
 			ImGui::Combo("Map", &map, zmmapnames, IM_ARRAYSIZE(zmmapnames));
+			ImGui::SameLine();
+			ImGui::Checkbox("EE##Easteregg", &bCompleteEE);
 
 			if (ImGui::Button("Set##MAP")) {
 
 				setMapStat(map, setRound);
+				if (bCompleteEE) {
+					setMapEE(map, false);
+				}
 			}
 
 			ImGui::SameLine();
@@ -2929,8 +3126,11 @@ void draw() {
 			ImGui::SliderInt("Round##STAT", &setRound, 0, 1000);
 
 			if (ImGui::Button("Max all Maps##MAP")) {
-
 				setMaxMapStats();
+			}
+
+			if (ImGui::Button("Complete All EEs##MAP")) {
+				setMapEE(0, true);
 			}
 
 			ImGui::Separator();
@@ -3174,6 +3374,7 @@ void draw() {
 								previewValue = finalName;
 								*(int*)(ProcessBase + 0x11306D40) = i;
 								chosenBackground = i;
+								ImGui::SetItemDefaultFocus();
 							}
 						}
 					}
@@ -3578,6 +3779,7 @@ void draw() {
 											primaryPreviews[j] = getComboItemName(i, true);
 											primarySelectedItems[j] = i;
 											primarySelectedSlot[j] = iComboBoxType;
+											ImGui::SetItemDefaultFocus();
 										}
 									}
 
@@ -3642,6 +3844,7 @@ void draw() {
 											secondaryPreviews[j] = getComboItemName(i, false);
 											secondarySelectedItems[j] = i;
 											secondarySelectedSlot[j] = iComboBoxType;
+											ImGui::SetItemDefaultFocus();
 										}
 									}
 
@@ -3702,6 +3905,7 @@ void draw() {
 											offhandPreviews[j] = getComboItemName(i, false);
 											offhandSelectedItems[j] = i;
 											offhandSelectedSlot[j] = iComboBoxType;
+											ImGui::SetItemDefaultFocus();
 										}
 									}
 
@@ -3766,6 +3970,7 @@ void draw() {
 											wildcardPreviews[j] = getComboItemName(i, false);
 											wildcardSelectedItems[j] = i;
 											wildcardSelectedSlot[j] = iComboBoxType;
+											ImGui::SetItemDefaultFocus();
 										}
 									}
 
@@ -3844,7 +4049,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 			return decltype(&hkPresent)(oPresent)(pSwapChain, SyncInterval, Flags);
 	}
 
-	if (GetAsyncKeyState(VK_F5) & 1)
+	if (GetAsyncKeyState(VK_OEM_PLUS) & 1)
 	{
 		open = !open;
 	}
