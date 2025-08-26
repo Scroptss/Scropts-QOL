@@ -465,7 +465,7 @@ namespace hooks {
 			auto g_entityP4 = (__int64)(g_entity + 0xEE8);
 			auto newDamage = (int)(damage * iDamageMultiplier);
 
-			if (LobbyTypes_GetMainMode() == LOBBY_MAINMODE_ZM) {
+			if (LobbyTypes_GetMainMode() == LOBBY_MAINMODE_ZM && inflictor != NULL && attacker != NULL) {
 
 				if (targ == g_entity || targ == g_entityP2 || targ == g_entityP3 || targ == g_entityP4) {
 

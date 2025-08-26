@@ -338,7 +338,7 @@ const char* slots[] = {
 };
 
 std::vector<std::string> legit_packets = { 
-"loadingNewMap",
+"loadingnewmap",
 "connectResponse",
 "statresponse",
 "LM",
@@ -354,4 +354,44 @@ std::vector<std::string> legit_packets = {
 "pinga",
 "steamAuthReq",
 "cfl" };
+
+const char* KeybindNames[17] = {
+    "F1",
+    "F2",
+    "F3",
+    "F4", 
+    "F5", 
+    "F6", 
+    "F7", 
+    "F8", 
+    "F9", 
+    "F10",
+    "[{",
+    "}]",
+    "INSERT",
+    "HOME",
+    "END",
+    "DELETE",
+    "PLUS/EQUALS"
+};
+
+int Keybinds[17] = {
+    VK_F1,
+    VK_F2,
+    VK_F3,
+    VK_F4, 
+    VK_F5, 
+    VK_F6, 
+    VK_F7, 
+    VK_F8, 
+    VK_F9, 
+    VK_F10, 
+    VK_OEM_4,
+    VK_OEM_6,
+	VK_INSERT,
+    VK_HOME,
+    VK_END,
+    VK_DELETE,
+    VK_OEM_PLUS
+};
 

@@ -129,7 +129,6 @@ const static auto CL_ConnectionlessCMD = reinterpret_cast<bool(__fastcall*)(int 
 const static auto Msg_ReadStringLine = reinterpret_cast<char*(__fastcall*)(msg_t* msg, char* string, int maxChars)>(ProcessBase + 0x2157140);
 const static auto Sys_GetTLS = reinterpret_cast<__int64(__fastcall*)()>(ProcessBase + 0x21837B0);
 
-const static auto LiveStorage_GetStatsBufferWithCaller = reinterpret_cast<DDLContext* (__fastcall*)(ControllerIndex_t controllerIndex, const char* file, const char* func, std::int32_t line, eModes mode, statsLocation playerStatsLocation)>(ProcessBase + 0x1EBEE70);
 const static auto BG_UnlockablesGetItemName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex)>(ProcessBase + 0x26A71F0);
 const static auto BG_UnlockablesGetItemAttachmentDisplayName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex, int attachmentNum)>(ProcessBase + 0x26A6410);
 const static auto BG_UnlockablesClearWeaponOptionNew = reinterpret_cast<const char* (__fastcall*)(eModes eMode, ControllerIndex_t, int itemIndex, int xp)>(ProcessBase + 0x26A2E30);
@@ -263,6 +262,8 @@ extern int wildcardSelectedSlot[9];
 
 extern const char* offhandMenuNames[9];
 extern const char* offhandSlots[8];
+extern const char* KeybindNames[17];
+extern int Keybinds[17];
 extern std::string offhandPreviews[8];
 extern int offhandSelectedItems[8];
 extern int offhandSelectedSlot[8];
