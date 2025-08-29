@@ -32,8 +32,9 @@ bool bCryptoSpend;
 bool bProtectStats;
 bool bProtectStatsRan;
 bool bCompleteEE;
+bool bArena;
 int UnlockTMR = clock();
-std::string version = "2.3.1";
+std::string version = "2.3.3";
 
 int minRank = 0;
 static int icon = 0;
@@ -42,6 +43,30 @@ static int pLevel = 0;
 static int pPrestige = 0;
 static int ParagonRank = 36;
 static int paragonRankXp = 0;
+static int iScore = 0;
+static int iKills = 0;
+static int iDeaths = 0;
+static int iAssists = 0;
+static int iHeadshots = 0;
+static int iTeamKills = 0;
+static int iSuicides = 0;
+static int iTimePlayedAllies = 0;
+static int iTimePlayedOpFor = 0;
+static int iTimePlayedOther = 0;
+static int iTimePlayedTotal = 0;
+static int iKD = 0;
+static int iWins = 0;
+static int iLosses = 0;
+static int iTies = 0;
+static int iCurWinStreak = 0;
+static int iWL = 0;
+static int iHits = 0;
+static int iMisses = 0;
+static int iTotalShots = 0;
+static int iAccuracy = 0;
+static int iTotalGamesPlayed = 0;
+static int iHighestRound = 0;
+static int iTotalRounds = 0;
 
 static int map = 0;
 static int setRound = 0;
@@ -318,6 +343,7 @@ int getComboItemSize(bool isPrimary) {
 		return 50;
 		break;
 	}
+	return 0;
 }
 
 const char* getComboItemName(int index, bool isPrimary) {
@@ -622,6 +648,10 @@ void UnlockAllAccolades() {
 			DDL_MoveToPath(tmp, result, 5, path);
 			DDL_SetUInt((__int64)result, a1, 1);
 			ZeroMemory(result, size(result));
+			path[4] = "value";
+			DDL_MoveToPath(tmp, result, 5, path);
+			DDL_SetUInt((__int64)result, a1, 9999999);
+			ZeroMemory(result, size(result));
 		}
 	}
 	LiveStorage_UploadStatsForController(0);
@@ -664,13 +694,18 @@ void CompleteAllMissions() {
 	const char* path[8];
 	auto a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsByMap";
-	path[2] = "hasBeenCompleted";
+	
 	char result[2000];
 
 	for (int i = 0; i < 11; i++) {
 		path[1] = cpmapnames[i];
+		path[2] = "hasBeenCompleted";
 		DDL_MoveToPath(tmp, result, 3, path);
 		DDL_SetUInt((__int64)result, a1, 1);
+		ZeroMemory(result, size(result));
+		path[2] = "score";
+		DDL_MoveToPath(tmp, result, 3, path);
+		DDL_SetUInt((__int64)result, a1, 99999999);
 		ZeroMemory(result, size(result));
 	}
 	LiveStorage_UploadStatsForController(0);
@@ -679,6 +714,23 @@ void CompleteAllMissions() {
 
 
 // MP
+
+void setStatbyName(const char* statName, int value) {
+	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	const char* path[8];
+	__int64 a1 = GetStatsBuffer(0);
+	path[0] = "PlayerStatsList";
+	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
+	char result[2000];
+	path[1] = statName;
+	DDL_MoveToPath(tmp, result, 3, path);
+	DDL_SetUInt((__int64)result, a1, value);
+	ZeroMemory(result, sizeof(result));
+
+}
 
 void setGroupStats() {
 
@@ -1920,6 +1972,9 @@ void setPrestige(int rank) {
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	char result[2000];
 
 	path[1] = "plevel";
@@ -1934,6 +1989,9 @@ void setpLevel(int rank) {
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	char result[2000];
 
 	path[1] = "rank";
@@ -1948,6 +2006,9 @@ void setpLevelXP(int rank) {
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	char result[2000];
 
 	path[1] = "rankxp";
@@ -1962,6 +2023,9 @@ void setMasterRank(int rank) {
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	char result[2000];
 
 	path[1] = "paragon_rank";
@@ -1976,6 +2040,9 @@ void setMasterXP(int rank) {
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	char result[2000];
 
 	path[1] = "paragon_rankxp";
@@ -1991,6 +2058,9 @@ void setAllRanks()
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	char result[2000];
 
 	path[1] = "plevel";
@@ -2028,123 +2098,138 @@ void setStats() {
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
 	char result[2000];
-	int amount = 500000;
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "total_games_played";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iTotalGamesPlayed);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iTotalGamesPlayed);
 	ZeroMemory(result, sizeof(result));
 
-	/*amount = rand() % (500 - 100) + 500;
+
 	path[2] = "statValue";
 	path[1] = "highest_round_reached";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iHighestRound);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
-	ZeroMemory(result, sizeof(result));*/
+	DDL_SetUInt((__int64)result, a1, iHighestRound);
+	ZeroMemory(result, sizeof(result));
+	
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "time_played_total";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iTimePlayedTotal);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iTimePlayedTotal);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (30 - 10) + 30;
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "cur_win_streak";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iCurWinStreak);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iCurWinStreak);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
-
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "score";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iScore);
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iScore);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
-
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "kills";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iKills);
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iKills);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
-
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "deaths";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iDeaths);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iDeaths);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
-
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "headshots";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iHeadshots);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iHeadshots);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
-
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "wlratio";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iWL);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, amount);
+	DDL_SetUInt((__int64)result, a1, iWL);
 	ZeroMemory(result, sizeof(result));
 
-	amount = rand() % (10000000 - 8000000 + 1) + 8000000;
-
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "kdratio";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, 5);
+	DDL_SetUInt((__int64)result, a1, iKD);
 	ZeroMemory(result, sizeof(result));
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, 5);
+	DDL_SetUInt((__int64)result, a1, iKD);
 	ZeroMemory(result, sizeof(result));
 
 	path[2] = "statValue";
+	if (bArena) {
+		path[2] = "arenaValue";
+	}
 	path[1] = "challenges";
 	DDL_MoveToPath(tmp, result, 3, path);
 	DDL_SetUInt((__int64)result, a1, 50000);
@@ -2155,16 +2240,15 @@ void setStats() {
 	ZeroMemory(result, sizeof(result));
 	LiveStorage_UploadStatsForController(0);
 
-
 }
 
 void setChallenges() {
 	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
 	auto a1 = GetStatsBuffer(0);
 	const char* path[8];
-	const char* mp[95] = { "kill_with_pickup","kill_while_wallrunning", "kill_while_in_air", "kill_while_sliding","kill_while_mantling","kill_enemy_thats_wallrunning","kill_enemy_that_in_air","kill_while_underwater","kill_after_doublejump_out_of_water","kill_while_sliding_from_doublejump","kill_while_wallrunning_2_walls","destroy_equipment_with_bullet", "darkops_zod_ee", "darkops_factory_ee", "darkops_castle_ee", "darkops_island_ee", "darkops_stalingrad_ee", "darkops_genesis_ee", "darkops_zod_super_ee", "darkops_factory_super_ee", "darkops_castle_super_ee", "darkops_island_super_ee", "darkops_stalingrad_super_ee", "darkops_genesis_super_ee", "bouncingbetty_planted","bouncingbetty_pickedup", "bouncingbetty_devil_planted", "bouncingbetty_devil_pickedup","bouncingbetty_holly_planted","bouncingbetty_holly_pickedup","ballistic_knives_pickedup","wallbuy_weapons_purchased","zdogs_killed","zraps_killed", "zwasp_killed", "zspiders_killed", "zthrashers_killed", "zsentinel_killed", "zraz_killed", "zdog_rounds_finished", "specialty_armorvest_drank","specialty_quickrevive_drank", "specialty_fastreload_drank", "specialty_additionalprimaryweapon_drank","specialty_staminup_drank","specialty_doubletap2_drank","specialty_widowswine_drank","specialty_deadshot_drank","specialty_electriccherry_drank","specialty_electriccherry_drank", "zombie_hunter_kill_headshot","zombie_hunter_kill_melee", "zombie_hunter_kill_crawler", "zombie_hunter_kill_packapunch","zombie_hunter_kill_trap","zombie_hunter_kill_explosives","zombie_hunter_explosion_multikill","zombie_hunter_blast_furnace","zombie_hunter_dead_wire","zombie_hunter_fire_works","zombie_hunter_thunder_wall","zombie_hunter_turned","zombie_hunter_mastery", "survivalist_buy_magic_box", "survivalist_buy_perk", "survivalist_buy_wallbuy", "survivalist_buy_door", "survivalist_revive", "survivalist_survive_rounds", "survivalist_craftable", "survivalist_board", "survivalist_powerup", "survivalist_mastery", "darkops_zod_ee", "darkops_factory_ee", "darkops_castle_ee", "darkops_island_ee", "darkops_stalingrad_ee", "darkops_genesis_ee", "darkops_zod_super_ee", "darkops_factory_super_ee", "darkops_castle_super_ee", "darkops_island_super_ee", "darkops_stalingrad_super_ee", "darkops_genesis_super_ee", "gum_gobbler_consume", "gum_gobbler_powerups", "gum_gobbler_alchemical_antithesis", "gum_gobbler_anywhere_but_here", "gum_gobbler_burned_out", "gum_gobbler_ephemeral_enhancement", "gum_gobbler_phoenix_up", "gum_gobbler_sword_flay", "gum_gobbler_wall_power", "gum_gobbler_mastery" };
+	const char* mp[71] = { "kill_with_pickup","kill_while_wallrunning", "kill_while_in_air", "kill_while_sliding","kill_while_mantling","kill_enemy_thats_wallrunning","kill_enemy_that_in_air","kill_while_underwater","kill_after_doublejump_out_of_water","kill_while_sliding_from_doublejump","kill_while_wallrunning_2_walls","destroy_equipment_with_bullet", "bouncingbetty_planted","bouncingbetty_pickedup", "bouncingbetty_devil_planted", "bouncingbetty_devil_pickedup","bouncingbetty_holly_planted","bouncingbetty_holly_pickedup","ballistic_knives_pickedup","wallbuy_weapons_purchased","zdogs_killed","zraps_killed", "zwasp_killed", "zspiders_killed", "zthrashers_killed", "zsentinel_killed", "zraz_killed", "zdog_rounds_finished", "specialty_armorvest_drank","specialty_quickrevive_drank", "specialty_fastreload_drank", "specialty_additionalprimaryweapon_drank","specialty_staminup_drank","specialty_doubletap2_drank","specialty_widowswine_drank","specialty_deadshot_drank","specialty_electriccherry_drank","specialty_electriccherry_drank", "zombie_hunter_kill_headshot","zombie_hunter_kill_melee", "zombie_hunter_kill_crawler", "zombie_hunter_kill_packapunch","zombie_hunter_kill_trap","zombie_hunter_kill_explosives","zombie_hunter_explosion_multikill","zombie_hunter_blast_furnace","zombie_hunter_dead_wire","zombie_hunter_fire_works","zombie_hunter_thunder_wall","zombie_hunter_turned","zombie_hunter_mastery", "survivalist_buy_magic_box", "survivalist_buy_perk", "survivalist_buy_wallbuy", "survivalist_buy_door", "survivalist_revive", "survivalist_survive_rounds", "survivalist_craftable", "survivalist_board", "survivalist_powerup", "survivalist_mastery", "gum_gobbler_consume", "gum_gobbler_powerups", "gum_gobbler_alchemical_antithesis", "gum_gobbler_anywhere_but_here", "gum_gobbler_burned_out", "gum_gobbler_ephemeral_enhancement", "gum_gobbler_phoenix_up", "gum_gobbler_sword_flay", "gum_gobbler_wall_power", "gum_gobbler_mastery" };
 	char result[2000];
-	for (int i = 0; i < 95; i++) {
+	for (int i = 0; i < 71; i++) {
 		path[0] = "playerstatslist";
 		path[1] = mp[i];
 		path[2] = "statValue";
@@ -2280,96 +2364,55 @@ void unlockContracts(int index, int max, int type) {
 
 // ZM
 
-std::vector<std::string> tokenize(const std::string& text, char delimiter)
-{
-	std::vector<std::string> buf;
-	std::stringstream ss(text);
-	std::string item;
+static void setMapEE(int map) {
 
-	while (std::getline(ss, item, delimiter))
-	{
-		buf.push_back(item);
-	}
-
-	return buf;
-}
-
-const char** vector_to_pointer_array(const std::vector<std::string>& strings)
-{
-	std::vector<const char*> buf;
-	buf.clear();
-
-	for (auto& str : strings)
-	{
-		buf.push_back(str.c_str());
-	}
-
-	return buf.data();
-}
-
-void ddl_set_for_path(__int64 state, __int64 context, std::string path, std::uint32_t value)
-{
-	auto ddl_path = tokenize(path, '.');
+	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto a1 = GetStatsBuffer(0);
+	const char* path[8];
+	const char* zmMaps[12] = { "darkops_zod_ee", "darkops_factory_ee", "darkops_castle_ee", "darkops_island_ee", "darkops_stalingrad_ee", "darkops_genesis_ee", "darkops_zod_super_ee", "darkops_factory_super_ee", "darkops_castle_super_ee", "darkops_island_super_ee", "darkops_stalingrad_super_ee", "darkops_genesis_super_ee" };
 	char result[2000];
 
-	DDL_MoveToPath(state, result, ddl_path.size(), vector_to_pointer_array(ddl_path));
-	DDL_SetUInt(state, context, value);
+	if (map > 6) map = 6;
+
+	path[0] = "playerstatslist";
+	path[1] = zmMaps[map];
+	path[2] = "statValue";
+	DDL_MoveToPath(tmp, result, 3, path);
+	DDL_SetUInt((__int64)result, a1, 50000);
+	path[2] = "challengeValue";
+	DDL_MoveToPath(tmp, result, 3, path);
+	DDL_SetUInt((__int64)result, a1, 50000);
+
+	path[0] = "playerstatslist";
+	path[1] = zmMaps[map + 6];
+	path[2] = "statValue";
+	DDL_MoveToPath(tmp, result, 3, path);
+	DDL_SetUInt((__int64)result, a1, 50000);
+	path[2] = "challengeValue";
+	DDL_MoveToPath(tmp, result, 3, path);
+	DDL_SetUInt((__int64)result, a1, 50000);
+
 }
 
-void set_stat_from_path(eModes mode, std::string path, std::uint32_t value)
-{
-	auto ddl_state = LiveStats_GetRootDDLState(mode);
-	auto ddl_context = GetStatsBuffer(0);
+static void setAllMapEE() {
 
-	ddl_set_for_path(ddl_state, ddl_context, path, value);
-}
+	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto a1 = GetStatsBuffer(0);
+	const char* path[8];
+	const char* zmMaps[12] = { "darkops_zod_ee", "darkops_factory_ee", "darkops_castle_ee", "darkops_island_ee", "darkops_stalingrad_ee", "darkops_genesis_ee", "darkops_zod_super_ee", "darkops_factory_super_ee", "darkops_castle_super_ee", "darkops_island_super_ee", "darkops_stalingrad_super_ee", "darkops_genesis_super_ee" };
+	char result[2000];
 
-void setMapEE(int map, bool all) {
-
-	if (all) {
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_super_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_super_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_super_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_super_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_super_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_genesis_ee", 1);
-		set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.DARKOPS_GENESIS_SUPER_EE", 1);
-
-		switch (map) {
-		case 0:
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_ee", 1);
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_zod_super_ee", 1);
-			break;
-		case 1:
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_ee", 1);
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_factory_super_ee", 1);
-			break;
-		case 2:
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_ee", 1);
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_castle_super_ee", 1);
-			break;
-		case 3:
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_ee", 1);
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_island_super_ee", 1);
-			break;
-		case 4:
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_ee", 1);
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_stalingrad_super_ee", 1);
-			break;
-		case 5:
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.darkops_genesis_ee", 1);
-			set_stat_from_path(Com_SessionMode_GetMode(), "playerstatslist.DARKOPS_GENESIS_SUPER_EE", 1);
-			break;
-		default:
-			ImGui::InsertNotification({ ImGuiToastType::Info, 5000, "Selected map does not track EE completion." });
-			break;
-		}
+	for (int i = 0; i < 12; i++) {
+		path[0] = "playerstatslist";
+		path[1] = zmMaps[i];
+		path[2] = "statValue";
+		DDL_MoveToPath(tmp, result, 3, path);
+		DDL_SetUInt((__int64)result, a1, 50000);
+		path[2] = "challengeValue";
+		DDL_MoveToPath(tmp, result, 3, path);
+		DDL_SetUInt((__int64)result, a1, 50000);
 	}
+	LiveStorage_UploadStatsForController(0);
 }
 
 void setMapStat(int map, int round) {
@@ -2692,7 +2735,7 @@ void draw() {
 	style.Colors[ImGuiCol_TitleBg] = ImColor(0, 0, 0, 110);
 	style.Colors[ImGuiCol_TitleBgActive] = ImColor(0, 0, 0, 110);
 	style.Colors[ImGuiCol_TitleBgCollapsed] = ImColor(0, 0, 0, 110);
-	style.Colors[ImGuiCol_Button] = ImColor(20, 20, 20, 200);			
+	style.Colors[ImGuiCol_Button] = ImColor(40, 40, 40, 200);			
 	style.Colors[ImGuiCol_ButtonActive] = ImColor(140, 140, 140, 255);	
 	style.Colors[ImGuiCol_ButtonHovered] = ImColor(56, 56, 56, 255);
 	style.Colors[ImGuiCol_CheckMark] = ImColor(255, 255, 255, 255);
@@ -2747,15 +2790,13 @@ void draw() {
 
 		ImGui::SetNextWindowSize(ImVec2(650.0f, 350.0f));
 
-		std::string title = std::string(" - Scropts QOL for BO3 (") + KeybindNames[selectedBind] + ")";
+		std::string title = std::string(" - Scropts QOL for BO3 (") + KeybindNames[selectedBind] + ") - ";
 
 		ImGui::Begin(title.c_str(), &open);
 
 		ImGui::BeginTabBar("##main");
 
 		if (ImGui::BeginTabItem("Account")) {
-
-			ImGui::Dummy(ImVec2(0, 5));
 
 			auto currentMode = Com_SessionMode_GetMode();
 			int maxXP = 1457200;
@@ -2775,20 +2816,61 @@ void draw() {
 				maxXP = 1375000;
 				maxParagonXP = 52345460;
 				minRank = 36;
-			}
-			
+			}			
 
 			ImGui::BeginChild("##RANKING", ImGui::GetContentRegionAvail());
 
-			if (Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0)) ImGui::BeginDisabled();
+			ImGui::Dummy(ImVec2(0, 5));
 
-			ImGui::Checkbox("Perma-unlock Watermelon Camo", &bLoginReward);
-			if (Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0)) ImGui::EndDisabled();
+			ImGui::Checkbox("Freeze Stats", &bProtectStats);
 
 			ImGui::SameLine();
-			HelpMarker("Enable before start screen to permanently unlock the watermelon camo!");
+
+			HelpMarker("Enable to disable the 'To protect your stats you have been kicked to the main menu' error. Use for reverting buggy MP stat edits, No stats are saved to profile while enabled!");
+
+			if (bProtectStats && !bProtectStatsRan) {
+				Dvar_SetFromString("tu10_validationFatal", "0", true);
+				bProtectStatsRan = true;
+			}
+
+			if (!bProtectStats && bProtectStatsRan) {
+				Dvar_SetFromString("tu10_validationFatal", "1", true);
+				bProtectStatsRan = false;
+			}
+
+			ImGui::SameLine();
+
+			ImGui::Checkbox("Arena", &bArena);
+
+			ImGui::SameLine();
+
+			HelpMarker("Enable to switch between MP and Arena stat editor.");
+
+			if (ImGui::Button("Set Rank")) {
+
+				setAllRanks();
+				//LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
+
+				LiveStorage_UploadStatsForController(0);
+			}
+
+			ImGui::SameLine();
+
+			if (ImGui::Button("Set Stats")) {
+				setStats();
+				//setChallenges();
+				//unlockSpecialistOutfits();
+				//setMaxTokens();
+				LiveStorage_UploadStatsForController(0);
+			}
 
 			// Prestige
+			ImGui::Separator();
+
+			ImGui::BulletText("Rank Editor");
+
+			ImGui::Separator();
+
 			if (ImGui::Button("Send##PRESTIGE")) {
 				setPrestige(pPrestige);
 				LiveStorage_UploadStatsForController(0);
@@ -2828,39 +2910,182 @@ void draw() {
 			ImGui::SameLine();
 			ImGui::SliderInt("Prestige Master XP##RANK", &paragonRankXp, 0, maxParagonXP);
 
-			if (ImGui::Button("Send All")) {
+			ImGui::Separator();
 
-				setAllRanks();
-				//LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
+			ImGui::BulletText("Stat Editor");
 
+			ImGui::Separator();
+
+			if (ImGui::Button("Send##SCORE")) {
+				setStatbyName("score", iScore);
 				LiveStorage_UploadStatsForController(0);
 			}
-
 			ImGui::SameLine();
+			ImGui::SliderInt("Score##RANK", &iScore, 0, MAXINT / 2);
+			
 
-			if (ImGui::Button("Max Stats")) {
-				setStats();
-				setChallenges();
-				unlockSpecialistOutfits();
-				setMaxTokens();
+			if (ImGui::Button("Send##KILLS")) {
+				setStatbyName("kills", iKills);
 				LiveStorage_UploadStatsForController(0);
 			}
-
-			ImGui::Checkbox("Freeze Stats", &bProtectStats);
-
 			ImGui::SameLine();
-
-			HelpMarker("Enable this to freeze your stats and disable the 'To protect your stats you have been kicked to the main menu' error. Useful for reverting buggy MP stat edits. Disable before fresh restarts.");
-
-			if (bProtectStats && !bProtectStatsRan) {
-				Dvar_SetFromString("tu10_validationFatal", "0", true);
-				bProtectStatsRan = true;
+			ImGui::SliderInt("Kills##RANK", &iKills, 0, MAXINT / 2);
+			
+			if (ImGui::Button("Send##DEATHS")) {
+				setStatbyName("deaths", iDeaths);
+				LiveStorage_UploadStatsForController(0);
 			}
-
-			if (!bProtectStats && bProtectStatsRan) {
-				Dvar_SetFromString("tu10_validationFatal", "1", true);
-				bProtectStatsRan = false;
+			ImGui::SameLine();
+			ImGui::SliderInt("Deaths##RANK", &iDeaths, 0, MAXINT / 2);
+			
+			if (ImGui::Button("Send##ASSISTS")) {
+				setStatbyName("assists", iAssists);
+				LiveStorage_UploadStatsForController(0);
 			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Assists##RANK", &iAssists, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##HEADSHOTS")) {
+				setStatbyName("headshots", iHeadshots);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Headshots##RANK", &iHeadshots, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TEAMKILLS")) {
+				setStatbyName("TEAMKILLS", iTeamKills);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Teamkills##RANK", &iTeamKills, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##SUICIDES")) {
+				setStatbyName("SUICIDES", iSuicides);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Suicides##RANK", &iSuicides, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TPALLIES")) {
+				setStatbyName("TIME_PLAYED_ALLIES", iTimePlayedAllies);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Time Played (Allies)##RANK", &iTimePlayedAllies, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TPOPFOR")) {
+				setStatbyName("TIME_PLAYED_OPFOR", iTimePlayedOpFor);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Time Played (OpFor)##RANK", &iTimePlayedOpFor, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TPOTHER")) {
+				setStatbyName("TIME_PLAYED_OTHER", iTimePlayedOther);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Time Played (Other)##RANK", &iTimePlayedOther, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TPTOTAL")) {
+				setStatbyName("TIME_PLAYED_TOTAL", iTimePlayedTotal);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Time Played (Total)##RANK", &iTimePlayedTotal, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TOTALGAMESPLAYED")) {
+				setStatbyName("total_games_played", iTotalGamesPlayed);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Total Games Played##RANK", &iTotalGamesPlayed, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##KDRATIO")) {
+				setStatbyName("KDRATIO", iKD);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("KD Ratio##RANK", &iKD, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##WINS")) {
+				setStatbyName("WINS", iWins);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Wins##RANK", &iWins, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##LOSSES")) {
+				setStatbyName("LOSSES", iLosses);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Losses##RANK", &iLosses, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TIES")) {
+				setStatbyName("TIES", iTies);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Ties##RANK", &iTies, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##CUR_WIN_STERAK")) {
+				setStatbyName("CUR_WIN_STREAK", iCurWinStreak);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Win Streak##RANK", &iCurWinStreak, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##WLRATIO")) {
+				setStatbyName("WLRATIO", iWL);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("WL Ratio##RANK", &iWL, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##HITS")) {
+				setStatbyName("HITS", iHits);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Hits##RANK", &iHits, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##MISSES")) {
+				setStatbyName("MISSES", iMisses);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Misses##RANK", &iMisses, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TOTALSHOTS")) {
+				setStatbyName("TOTAL_SHOTS", iTotalShots);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Total Shots##RANK", &iTotalShots, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##ACCURACY")) {
+				setStatbyName("ACCURACY", iAccuracy);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Accuracy##RANK", &iAccuracy, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##HIGHESTROUND")) {
+				setStatbyName("HIGHEST_ROUND_REACHED", iHighestRound);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Highest Round Reached##RANK", &iHighestRound, 0, MAXINT / 2);
+
+			if (ImGui::Button("Send##TOTALROUNDSSURVIVED")) {
+				setStatbyName("TOTAL_ROUNDS_SURVIVED", iTotalRounds);
+				LiveStorage_UploadStatsForController(0);
+			}
+			ImGui::SameLine();
+			ImGui::SliderInt("Total Rounds Survived##RANK", &iTotalRounds, 0, MAXINT / 2);
+
+			ImGui::Separator();
 
 			if (ImGui::Button("Unlock All Class Slots")) {
 
@@ -2879,7 +3104,6 @@ void draw() {
 				setMaxWeapons();
 				setGroupStats();
 				LiveStorage_UploadStatsForController(0);
-
 			}
 
 			if (ImGui::Button("Unlock Fresh Start Calling Card")) {
@@ -2915,6 +3139,14 @@ void draw() {
 				ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "Contracts Unlocked! Join and leave at least 9 public \nmatches to make contract rewards appear in your inventory" });
 			}
 
+			if (ImGui::Button("Complete Challenges")) {
+				setChallenges();
+			}
+
+			if (ImGui::Button("Complete Hero Challenges")) {
+				unlockSpecialistOutfits();
+			}
+
 			if (ImGui::Button("Complete Campaign")) {
 				CompleteAllMissions();
 			}
@@ -2924,7 +3156,7 @@ void draw() {
 			}
 
 			if (ImGui::Button("Max Accolades")) {
-				UnlockAllCollectibles();
+				UnlockAllAccolades();
 			}
 
 			ImGui::TextDisabled("Suggest more unlocks");
@@ -3035,8 +3267,10 @@ void draw() {
 
 				setMapStat(map, setRound);
 				if (bCompleteEE) {
-					setMapEE(map, false);
+					setMapEE(map);
 				}
+
+				LiveStorage_UploadStatsForController(0);
 			}
 
 			ImGui::SameLine();
@@ -3048,7 +3282,7 @@ void draw() {
 			}
 
 			if (ImGui::Button("Complete All EEs##MAP")) {
-				setMapEE(0, true);
+				setAllMapEE();
 			}
 
 			ImGui::Separator();
@@ -3278,7 +3512,7 @@ void draw() {
 
 			if (ImGui::BeginCombo("Calling Card##BACKGROUND", previewValue.c_str()))
 			{
-				for (size_t i = 0; i < 750; i++) {
+				for (int i = 0; i < 750; i++) {
 
 					std::string cardName = get_column_value_for_row_from_path("gamedata/emblems/backgrounds.csv", i, 4);
 
@@ -3702,7 +3936,7 @@ void draw() {
 
 							if (ImGui::BeginCombo(primaryLabel.c_str(), primaryPreviews[j].c_str())) {
 
-								for (size_t i = 0; i < primaryLimit; i++) {
+								for (int i = 0; i < primaryLimit; i++) {
 
 									auto selectableLabel = getComboItemName(i, true);
 
@@ -3766,7 +4000,7 @@ void draw() {
 
 							if (ImGui::BeginCombo(secondaryLabel.c_str(), secondaryPreviews[j].c_str())) {
 
-								for (size_t i = 0; i < limit; i++) {
+								for (int i = 0; i < limit; i++) {
 
 									auto selectableLabel = getComboItemName(i, false);
 
@@ -3826,7 +4060,7 @@ void draw() {
 
 							if (ImGui::BeginCombo(secondaryLabel.c_str(), offhandPreviews[j].c_str())) {
 
-								for (size_t i = 0; i < limit; i++) {
+								for (int i = 0; i < limit; i++) {
 
 									auto selectableLabel = getComboItemName(i, false);
 
@@ -3890,7 +4124,7 @@ void draw() {
 
 							if (ImGui::BeginCombo(secondaryLabel.c_str(), wildcardPreviews[j].c_str())) {
 
-								for (size_t i = 0; i < limit; i++) {
+								for (int i = 0; i < limit; i++) {
 
 									auto selectableLabel = getComboItemName(i, false);
 
@@ -3992,7 +4226,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 	if (bLoginReward) Dvar_SetFromString("loot_loginReward_active", "1", 1);
 
 	if (bDivinium) {
-		if (clock() - UnlockTMR > 5) {
+		if (clock() - UnlockTMR > 10) {
 			char buf_cmd[255];
 			sprintf_s(buf_cmd, "%c %u %u", 120, 3, 250);
 			SV_GameSendServerCommand(0, 1, buf_cmd);
