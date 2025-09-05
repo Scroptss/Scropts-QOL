@@ -737,12 +737,7 @@ namespace hooks {
 
 	void onFrame() {
 
-		if (!Live_IsUserInGame(0) && Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0)) {
-			Dvar_SetFromString("groupCountsVisible", "1", true);
-			Dvar_SetFromString("groupZeroCountsVisible", "1", true);
-			Dvar_SetFromString("groupDownloadInterval", "1", true);
-			Dvar_SetFromString("groupUploadInterval", "1", true);
-		}
+		
 
 		static bool dispatch_enabled = false;
 

@@ -89,7 +89,7 @@ typedef void(__fastcall* live_presence_pack_t)(presence_data_s* presence, void* 
 
 extern live_presence_pack_t live_presence_pack;
 extern send_p2p_packet_t send_p2p_packet;
-extern LiveStats_GetRootDDLStateT LiveStats_GetRootDDLState;
+extern LiveStats_GetRootDDLStateT LiveStats_Core_GetRootDDLState;
 extern GetSessionStateT GetSessionState;
 extern LiveStats_Core_GetDDLContextT LiveStats_Core_GetDDLContext;
 extern LiveStats_Core_GetStableDDLContextT LiveStats_Core_GetStableDDLContext;
@@ -129,6 +129,7 @@ const static auto CL_ConnectionlessCMD = reinterpret_cast<bool(__fastcall*)(int 
 const static auto Msg_ReadStringLine = reinterpret_cast<char*(__fastcall*)(msg_t* msg, char* string, int maxChars)>(ProcessBase + 0x2157140);
 const static auto Sys_GetTLS = reinterpret_cast<__int64(__fastcall*)()>(ProcessBase + 0x21837B0);
 
+const static auto BG_UnlockablesSetBubbleGumPackName= reinterpret_cast<std::uintptr_t(__fastcall*)(CACRoot* cacRoot, int packIndex, const char* name)>(ProcessBase + 0x26AD4D0);
 const static auto BG_UnlockablesGetItemName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex)>(ProcessBase + 0x26A71F0);
 const static auto BG_UnlockablesGetItemAttachmentDisplayName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex, int attachmentNum)>(ProcessBase + 0x26A6410);
 const static auto BG_UnlockablesClearWeaponOptionNew = reinterpret_cast<const char* (__fastcall*)(eModes eMode, ControllerIndex_t, int itemIndex, int xp)>(ProcessBase + 0x26A2E30);

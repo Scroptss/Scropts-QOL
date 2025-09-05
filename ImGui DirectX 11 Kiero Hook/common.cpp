@@ -88,7 +88,7 @@ DWORD_PTR iSteamGameServer = *(DWORD_PTR*)(ProcessBase + 0x1142E158);
 DWORD_PTR iSteamApps = *(DWORD_PTR*)(ProcessBase + 0x10BBCBC0);
 DWORD_PTR pGetPersonaNameReturn = ProcessBase + 0x1EB0DEC;
 std::ofstream myfile;
-LiveStats_GetRootDDLStateT LiveStats_GetRootDDLState = (LiveStats_GetRootDDLStateT)(ProcessBase + 0x1EA96D0);
+LiveStats_GetRootDDLStateT LiveStats_Core_GetRootDDLState = (LiveStats_GetRootDDLStateT)(ProcessBase + 0x1EA96D0);
 GetSessionStateT GetSessionState = (GetSessionStateT)(ProcessBase + 0x20F6D30);
 LiveStats_Core_GetDDLContextT LiveStats_Core_GetDDLContext = (LiveStats_Core_GetDDLContextT)(ProcessBase + 0x1EA9660);
 LiveStats_Core_GetStableDDLContextT LiveStats_Core_GetStableDDLContext = (LiveStats_Core_GetStableDDLContextT)(ProcessBase + 0x1EA9730);

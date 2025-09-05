@@ -25,7 +25,7 @@ bool bFirstGumRan;
 bool open = true;
 bool bClassEditor;
 bool bDivinium;
-bool bLoginReward;
+bool bLoginReward = true;
 bool bDiviniumSpend;
 bool bCrypto;
 bool bCryptoSpend;
@@ -34,15 +34,19 @@ bool bProtectStatsRan;
 bool bCompleteEE;
 bool bArena;
 int UnlockTMR = clock();
-std::string version = "2.3.3";
+std::string version = "2.3.4";
+std::string sPackName;
 
 int minRank = 0;
+static int iCryptoAmt = 1500;
 static int icon = 0;
 static int rankXp = 0;
 static int pLevel = 0;
 static int pPrestige = 0;
 static int ParagonRank = 36;
 static int paragonRankXp = 0;
+static int iArenaPoints = 0;
+static int iLootSpeed = 50;
 static int iScore = 0;
 static int iKills = 0;
 static int iDeaths = 0;
@@ -546,7 +550,7 @@ void unlockCallingCards() {
 
 	for (int i = 0; i < 800; i++) {
 
-		__int64 RootState = LiveStats_GetRootDDLState(Com_SessionMode_GetMode());
+		__int64 RootState = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
 		const char* path[8]{};
 		__int64 DDLContext = GetStatsBuffer(0);
 		char toState[2000]{};
@@ -589,7 +593,7 @@ void unlockCallingCards() {
 void unlockClassSlots() {
 
 	for (int i = 1; i < 6; i++) {
-		__int64 RootState = LiveStats_GetRootDDLState(Com_SessionMode_GetMode());
+		__int64 RootState = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
 		const char* path[8]{};
 		__int64 DDLContext = GetStatsBuffer(0);
 		char toState[2000]{};
@@ -611,7 +615,7 @@ void unlockClassSlots() {
 
 void setMaxTokens() {
 
-	__int64 RootState = LiveStats_GetRootDDLState(Com_SessionMode_GetMode());
+	__int64 RootState = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
 	const char* path[8]{};
 	__int64 DDLContext = GetStatsBuffer(0);
 	char toState[2000]{};
@@ -632,7 +636,7 @@ void UnlockAllAccolades() {
 
 	using namespace std;
 
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	auto a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsByMap";
@@ -661,7 +665,7 @@ void UnlockAllAccolades() {
 void UnlockAllCollectibles() {
 	using namespace std;
 
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	auto a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsByMap";
@@ -690,7 +694,7 @@ void UnlockAllCollectibles() {
 void CompleteAllMissions() {
 	using namespace std;
 
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	auto a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsByMap";
@@ -712,11 +716,25 @@ void CompleteAllMissions() {
 
 }
 
+// Arena 
+
+void setArenaPoints(int points) {
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
+	const char* path[8];
+	auto a1 = GetStatsBuffer(0);
+	path[0] = "arenaStats";
+	path[1] = "points";
+	char result[2000];
+	DDL_MoveToPath(tmp, result, 2, path);
+	DDL_SetUInt((__int64)result, a1, points);
+	ZeroMemory(result, sizeof(result));
+}
+
 
 // MP
 
 void setStatbyName(const char* statName, int value) {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -737,7 +755,7 @@ void setGroupStats() {
 	const char* path[8]{};
 	const char* statPath[8]{};
 	auto mode = Com_SessionMode_GetMode();
-	__int64 RootState = LiveStats_GetRootDDLState(Com_SessionMode_GetMode());
+	__int64 RootState = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
 	__int64 DDLContext = GetStatsBuffer(0);
 	char toState[2000]{};
 
@@ -827,1112 +845,146 @@ void setGroupStats() {
 
 }
 
-void setMaxWeapons() {
+struct StatEntry {
+	const char* name;
+	unsigned value;
+	bool goldAlso;
+};
 
-	const char* path[8]{};
-	const char* statPath[8]{};
-	auto mode = Com_SessionMode_GetMode();
-	__int64 RootState = LiveStats_GetRootDDLState(Com_SessionMode_GetMode());
-	__int64 DDLContext = GetStatsBuffer(0);
+void SetValue(__int64 root, __int64 ctx, char* toState, const std::initializer_list<const char*> path, unsigned val) {
+	const char* arr[8];
+	int depth = 0;
+
+	for (auto p : path) {
+		arr[depth++] = p;
+	}
+
+	if (DDL_MoveToPath(root, toState, depth, arr)) {
+		DDL_SetUInt((__int64)toState, ctx, val);
+		ZeroMemory(toState, 2000);
+	}
+}
+
+void setMaxWeapons() {
+	auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
+	auto ctx = GetStatsBuffer(0);
 	char toState[2000]{};
 
 	for (int i = 0; i < 256; i++) {
+		std::vector<const char*> base = { "itemstats", intToConstCharPtr(i) };
 
-		ZeroMemory(path, sizeof(path));
-		
+		SetValue(root, ctx, toState, { base[0], base[1], "purchased" }, 3);
+		SetValue(root, ctx, toState, { base[0], base[1], "xp" }, 65535);
+		SetValue(root, ctx, toState, { base[0], base[1], "plevel" }, 15);
 
-		path[0] = "itemstats";
-		path[1] = intToConstCharPtr(i);
+		for (int j = 0; j < 3; j++)
+			SetValue(root, ctx, toState, { base[0], base[1], "isproversionunlocked" }, 3);
 
-		path[2] = "purchased";
-		DDL_MoveToPath(RootState, toState, 3, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 3);
-		ZeroMemory(toState, sizeof(toState));
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "headshots", "statValue" }, 7195000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "headshots", "challengeValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "assists", "statValue" }, 7195000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "assists", "challengeValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "kills", "statValue" }, 7195000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "kills", "challengeValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "challenges", "statValue" }, 6);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "challenges", "challengeValue" }, 6);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "backstabber_kill", "statValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "backstabber_kill", "challengeValue" }, 10);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "accuracy", "statValue" }, 100);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "accuracy", "challengeValue" }, 1);
 
-		path[2] = "xp";
-
-		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-			DDL_SetUInt((__int64)toState, DDLContext, 665535);
-		}
-
-		path[2] = "plevel";
-
-		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-			DDL_SetUInt((__int64)toState, DDLContext, 15);
-		}
-
-		path[2] = "isproversionunlocked";
-
-		for (int j = 0; j < 3; j++) {
-
-			if (DDL_MoveToPath(RootState, toState, 3, path)) {
-				DDL_SetUInt((__int64)toState, DDLContext, 3);
-			}
-
-		}
-
-		path[2] = "stats";
-
-		path[3] = "headshots";
-		path[4] = "statValue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 7195000);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[4] = "challengeValue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 75000);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[3] = "assists";
-		path[4] = "statValue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 76000);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[4] = "challengevalue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 75000);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[3] = "kills";
-		path[4] = "statvalue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 76000);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[4] = "challengevalue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 75000);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[3] = "challenges";
-		path[4] = "statvalue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 6);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[4] = "challengevalue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 6);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[3] = "backstabber_kill";
-		path[4] = "statvalue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 100);
-		ZeroMemory(toState, sizeof(toState));
-
-		path[4] = "challengevalue";
-		DDL_MoveToPath(RootState, toState, 5, path);
-		DDL_SetUInt((__int64)toState, DDLContext, 10);
-		ZeroMemory(toState, sizeof(toState));
-
-
-		for (int j = 0; j < 8; j++)
-		{
-			char buf[255];
+		for (int j = 0; j < 8; j++) {
+			char buf[32];
 			sprintf_s(buf, "challenge%d", j);
-			path[3] = buf;
-			DDL_MoveToPath(RootState, toState, 5, path);
-			DDL_SetUInt((__int64)toState, DDLContext, 50000);
-			ZeroMemory(toState, sizeof(toState));
-
-			path[4] = "challengeValue";
-			DDL_MoveToPath(RootState, toState, 5, path);
-			DDL_SetUInt((__int64)toState, DDLContext, 50000);
-			ZeroMemory(toState, sizeof(toState));
+			SetValue(root, ctx, toState, { base[0], base[1], "stats", buf }, 50000);
+			SetValue(root, ctx, toState, { base[0], base[1], "stats", buf, "challengeValue" }, 50000);
 		}
 	}
 
-	path[0] = "playerstatslist";
-	path[1] = "weapons_mastery";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 6);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 6);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "secondary_mastery";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "secondary_mastery_launcher";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "secondary_mastery_pistol";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "tscc_challenge_mastery";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 2);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 2);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "weapons_mastery_assault";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	
-	path[1] = "weapons_mastery_cqb";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	
-	path[1] = "weapons_mastery_lmg";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	
-	path[1] = "weapons_mastery_smg";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	
-	path[1] = "weapons_mastery_sniper";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	 // DLC Guns
-
-	path[1] = "ar_famas_for_diamond";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "ar_famas_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "ar_garand_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "ar_garand_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "ar_peacekeeper_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "ar_peacekeeper_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "ar_pulse_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "ar_pulse_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "bowie_knife_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "bowie_knife_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "launcher_multi_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "launcher_multi_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "lmg_infinite_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "lmg_infinite_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 5, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_bat_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_bat_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_boneglass_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_boneglass_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_boxing_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_boxing_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_butterfly_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_butterfly_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_chainsaw_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_chainsaw_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_crescent_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_crescent_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_crowbar_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_crowbar_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_dagger_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_dagger_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_fireaxe_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_fireaxe_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_improvise_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_improvise_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_katana_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_katana_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_knuckles_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_knuckles_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_mace_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_mace_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_nunchuks_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_nunchuks_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_prosthetic_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_prosthetic_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_shockbaton_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_shockbaton_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_shovel_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_shovel_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_sword_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_sword_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_wrench_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "melee_wrench_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "pistol_energy_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "pistol_energy_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "pistol_shotgun_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "pistol_shotgun_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "shotgun_energy_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "shotgun_energy_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "smg_mp40_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "smg_mp40_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "smg_nailgun_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "smg_nailgun_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "smg_rechamber_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "smg_rechamber_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "sniper_double_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "sniper_double_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "sniper_quickscope_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "sniper_quickscope_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "special_crossbow_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "special_crossbow_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "special_discgun_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "special_discgun_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_01_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_01_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_02_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_02_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_03_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_03_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_04_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_04_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_05_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_05_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_06_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_06_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_07_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_07_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_08_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_08_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_09_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_09_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_10_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_10_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_11_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_11_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_12_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_12_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_13_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_13_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 5, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_14_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_14_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_15_for_diamond";
-
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-	path[1] = "z_weap_15_gold";
-	path[2] = "statValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-	path[2] = "challengeValue";
-	DDL_MoveToPath(RootState, toState, 3, path);
-	DDL_SetUInt((__int64)toState, DDLContext, 3);
-	ZeroMemory(toState, sizeof(toState));
-
-
-
+	std::vector<StatEntry> entries = {
+		{ "weapons_mastery", 6, false },
+		{ "secondary_mastery", 3, false },
+		{ "secondary_mastery_launcher", 3, false },
+		{ "secondary_mastery_pistol", 3, false },
+		{ "tscc_challenge_mastery", 2, false },
+		{ "weapons_mastery_assault", 3, false },
+		{ "weapons_mastery_cqb", 3, false },
+		{ "weapons_mastery_lmg", 3, false },
+		{ "weapons_mastery_smg", 3, false },
+		{ "weapons_mastery_sniper", 3, false },
+
+		{ "ar_famas", 3, true },
+		{ "ar_garand", 3, true },
+		{ "ar_peacekeeper", 3, true },
+		{ "ar_pulse", 3, true },
+		{ "bowie_knife", 3, true },
+		{ "launcher_multi", 3, true },
+		{ "lmg_infinite", 3, true },
+		{ "melee_bat", 3, true },
+		{ "melee_boneglass", 3, true },
+		{ "melee_boxing", 3, true },
+		{ "melee_butterfly", 3, true },
+		{ "melee_chainsaw", 3, true },
+		{ "melee_crescent", 3, true },
+		{ "melee_crowbar", 3, true },
+		{ "melee_dagger", 3, true },
+		{ "melee_fireaxe", 3, true },
+		{ "melee_improvise", 3, true },
+		{ "melee_katana", 3, true },
+		{ "melee_knuckles", 3, true },
+		{ "melee_mace", 3, true },
+		{ "melee_nunchuks", 3, true },
+		{ "melee_prosthetic", 3, true },
+		{ "melee_shockbaton", 3, true },
+		{ "melee_shovel", 3, true },
+		{ "melee_sword", 3, true },
+		{ "melee_wrench", 3, true },
+		{ "pistol_energy", 3, true },
+		{ "pistol_shotgun", 3, true },
+		{ "shotgun_energy", 3, true },
+		{ "smg_mp40", 3, true },
+		{ "smg_nailgun", 3, true },
+		{ "smg_rechamber", 3, true },
+		{ "sniper_double", 3, true },
+		{ "sniper_quickscope", 3, true },
+		{ "special_crossbow", 3, true },
+		{ "special_discgun", 3, true },
+
+		{ "z_weap_01", 3, true },
+		{ "z_weap_02", 3, true },
+		{ "z_weap_03", 3, true },
+		{ "z_weap_04", 3, true },
+		{ "z_weap_05", 3, true },
+		{ "z_weap_06", 3, true },
+		{ "z_weap_07", 3, true },
+		{ "z_weap_08", 3, true },
+		{ "z_weap_09", 3, true },
+		{ "z_weap_10", 3, true },
+		{ "z_weap_11", 3, true },
+		{ "z_weap_12", 3, true },
+		{ "z_weap_13", 3, true },
+		{ "z_weap_14", 3, true },
+		{ "z_weap_15", 3, true }
+	};
+
+	for (auto& e : entries) {
+		SetValue(root, ctx, toState, { "playerstatslist", e.name, "statValue" }, e.value);
+		SetValue(root, ctx, toState, { "playerstatslist", e.name, "challengeValue" }, e.value);
+
+		if (e.goldAlso) {
+			std::string gold = std::string(e.name) + "_gold";
+			std::string diamond = std::string(e.name) + "_for_diamond";
+			SetValue(root, ctx, toState, { "playerstatslist", gold.c_str(), "statValue" }, e.value);
+			SetValue(root, ctx, toState, { "playerstatslist", gold.c_str(), "challengeValue" }, e.value);
+			SetValue(root, ctx, toState, { "playerstatslist", diamond.c_str(), "challengeValue" }, e.value);
+		}
+	}
 
 	LiveStorage_UploadStatsForController(0);
-
-	
-
 }
 
 void unlockSpecialistOutfits() {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -1967,24 +1019,28 @@ void unlockSpecialistOutfits() {
 }
 
 void setPrestige(int rank) {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
+	char result[2000];
+	int depth = 3;
 	path[0] = "PlayerStatsList";
+	path[1] = "plevel";
 	path[2] = "statValue";
 	if (bArena) {
-		path[2] = "arenaValue";
+		path[0] = "arenaStats";
+		path[1] = "points";
+		path[2] = "";
+		depth = 2;
 	}
-	char result[2000];
 
-	path[1] = "plevel";
-	DDL_MoveToPath(tmp, result, 3, path);
+	DDL_MoveToPath(tmp, result, depth, path);
 	DDL_SetUInt((__int64)result, a1, rank);
 	ZeroMemory(result, sizeof(result));
 }
 
 void setpLevel(int rank) {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -2001,7 +1057,7 @@ void setpLevel(int rank) {
 }
 
 void setpLevelXP(int rank) {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -2018,7 +1074,7 @@ void setpLevelXP(int rank) {
 }
 
 void setMasterRank(int rank) {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -2035,7 +1091,7 @@ void setMasterRank(int rank) {
 }
 
 void setMasterXP(int rank) {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -2053,7 +1109,7 @@ void setMasterXP(int rank) {
 
 void setAllRanks()
 {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -2092,7 +1148,7 @@ void setAllRanks()
 
 void setStats() {
 
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "PlayerStatsList";
@@ -2243,7 +1299,7 @@ void setStats() {
 }
 
 void setChallenges() {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	auto a1 = GetStatsBuffer(0);
 	const char* path[8];
 	const char* mp[71] = { "kill_with_pickup","kill_while_wallrunning", "kill_while_in_air", "kill_while_sliding","kill_while_mantling","kill_enemy_thats_wallrunning","kill_enemy_that_in_air","kill_while_underwater","kill_after_doublejump_out_of_water","kill_while_sliding_from_doublejump","kill_while_wallrunning_2_walls","destroy_equipment_with_bullet", "bouncingbetty_planted","bouncingbetty_pickedup", "bouncingbetty_devil_planted", "bouncingbetty_devil_pickedup","bouncingbetty_holly_planted","bouncingbetty_holly_pickedup","ballistic_knives_pickedup","wallbuy_weapons_purchased","zdogs_killed","zraps_killed", "zwasp_killed", "zspiders_killed", "zthrashers_killed", "zsentinel_killed", "zraz_killed", "zdog_rounds_finished", "specialty_armorvest_drank","specialty_quickrevive_drank", "specialty_fastreload_drank", "specialty_additionalprimaryweapon_drank","specialty_staminup_drank","specialty_doubletap2_drank","specialty_widowswine_drank","specialty_deadshot_drank","specialty_electriccherry_drank","specialty_electriccherry_drank", "zombie_hunter_kill_headshot","zombie_hunter_kill_melee", "zombie_hunter_kill_crawler", "zombie_hunter_kill_packapunch","zombie_hunter_kill_trap","zombie_hunter_kill_explosives","zombie_hunter_explosion_multikill","zombie_hunter_blast_furnace","zombie_hunter_dead_wire","zombie_hunter_fire_works","zombie_hunter_thunder_wall","zombie_hunter_turned","zombie_hunter_mastery", "survivalist_buy_magic_box", "survivalist_buy_perk", "survivalist_buy_wallbuy", "survivalist_buy_door", "survivalist_revive", "survivalist_survive_rounds", "survivalist_craftable", "survivalist_board", "survivalist_powerup", "survivalist_mastery", "gum_gobbler_consume", "gum_gobbler_powerups", "gum_gobbler_alchemical_antithesis", "gum_gobbler_anywhere_but_here", "gum_gobbler_burned_out", "gum_gobbler_ephemeral_enhancement", "gum_gobbler_phoenix_up", "gum_gobbler_sword_flay", "gum_gobbler_wall_power", "gum_gobbler_mastery" };
@@ -2268,7 +1324,7 @@ void unlockContracts(int index, int max, int type) {
 
 	while (index < max) {
 
-		__int64 RootState = LiveStats_GetRootDDLState(Com_SessionMode_GetMode());
+		__int64 RootState = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
 		const char* path[8]{};
 		const char* statPath[8]{};
 		__int64 DDLContext = GetStatsBuffer(0);
@@ -2361,12 +1417,20 @@ void unlockContracts(int index, int max, int type) {
 
 }
 
+void resetCrypto() {
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
+	auto a1 = GetStatsBuffer(0);
+	char result[2000];
+	DDL_MoveToName(tmp, result, "mp_loot_xp_due");
+	DDL_SetUInt((__int64)result, a1, 0);
+	LiveStorage_UploadStatsForController(0);
+}
 
 // ZM
 
 static void setMapEE(int map) {
 
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	auto a1 = GetStatsBuffer(0);
 	const char* path[8];
 	const char* zmMaps[12] = { "darkops_zod_ee", "darkops_factory_ee", "darkops_castle_ee", "darkops_island_ee", "darkops_stalingrad_ee", "darkops_genesis_ee", "darkops_zod_super_ee", "darkops_factory_super_ee", "darkops_castle_super_ee", "darkops_island_super_ee", "darkops_stalingrad_super_ee", "darkops_genesis_super_ee" };
@@ -2396,7 +1460,7 @@ static void setMapEE(int map) {
 
 static void setAllMapEE() {
 
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	auto a1 = GetStatsBuffer(0);
 	const char* path[8];
 	const char* zmMaps[12] = { "darkops_zod_ee", "darkops_factory_ee", "darkops_castle_ee", "darkops_island_ee", "darkops_stalingrad_ee", "darkops_genesis_ee", "darkops_zod_super_ee", "darkops_factory_super_ee", "darkops_castle_super_ee", "darkops_island_super_ee", "darkops_stalingrad_super_ee", "darkops_genesis_super_ee" };
@@ -2416,7 +1480,7 @@ static void setAllMapEE() {
 }
 
 void setMapStat(int map, int round) {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "playerstatsbymap";
@@ -2433,7 +1497,7 @@ void setMapStat(int map, int round) {
 }
 
 void setMaxMapStats() {
-	auto tmp = LiveStats_GetRootDDLState(GetSessionState());
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
 	path[0] = "playerstatsbymap";
@@ -2679,6 +1743,16 @@ void setClassItem(int ItemId, int slotItem, int classIndex) {
 	BG_UnlockablesSetItemIndex(&Buffer, (unsigned int)classIndex, a4, ItemId);
 	ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "setClassItem: Successfully set item %i in %s (Class index %i)", ItemId, slots[slotItem], classIndex});
 
+}
+
+void setGobblePackName(int gobblePackIndex, std::string gobblePackName) {
+
+	CACRoot Buffer{};
+	eGameModes a = Com_SessionMode_GetGameMode();
+	eModes a1 = Com_SessionMode_GetMode();
+	CACType a3 = LiveStats_Loadouts_GetCACTypeForMode(a1, a);
+	auto CACroot = LiveStats_Loadouts_GetCACRoot(&Buffer, 0, a3);
+	BG_UnlockablesSetBubbleGumPackName(&Buffer, gobblePackIndex, gobblePackName.c_str());
 }
 
 void setClassName(int classSetIndex, int classIndex, std::string className) { 
@@ -3099,7 +2173,7 @@ void draw() {
 				LiveStorage_UploadStatsForController(0);
 			}
 
-			if (ImGui::Button("Max Weapons")) {
+			if (ImGui::Button("Max Weapon Stats")) {
 
 				setMaxWeapons();
 				setGroupStats();
@@ -3260,26 +2334,32 @@ void draw() {
 			ImGui::BulletText("Map Stat Editor");
 
 			ImGui::Combo("Map", &map, zmmapnames, IM_ARRAYSIZE(zmmapnames));
-			ImGui::SameLine();
-			ImGui::Checkbox("EE##Easteregg", &bCompleteEE);
+			//ImGui::SameLine();
+			ImGui::SliderInt("Round##STAT", &setRound, 0, 1000);
 
-			if (ImGui::Button("Set##MAP")) {
+			if (ImGui::Button("Set Round##MAP")) {
 
 				setMapStat(map, setRound);
-				if (bCompleteEE) {
-					setMapEE(map);
-				}
 
 				LiveStorage_UploadStatsForController(0);
 			}
 
-			ImGui::SameLine();
+			ImGui::SameLine(0.0f, 5.0f);
 
-			ImGui::SliderInt("Round##STAT", &setRound, 0, 1000);
+			if (ImGui::Button("Set EE Complete##MAP")) {
+
+				setMapEE(map);
+
+				LiveStorage_UploadStatsForController(0);
+			}
+
 
 			if (ImGui::Button("Max all Maps##MAP")) {
 				setMaxMapStats();
 			}
+
+
+			ImGui::SameLine(0.0f, 5.0f);
 
 			if (ImGui::Button("Complete All EEs##MAP")) {
 				setAllMapEE();
@@ -3311,6 +2391,8 @@ void draw() {
 			static int BuffIndex;
 			static int PackIndex;
 
+			ImGui::InputTextWithHint("##INPUTGOBBLEPACKNAME", "GobblePack Name", &sPackName);
+
 			ImGui::SetNextItemWidth(250);
 			ImGui::Combo("Gobblegum Pack", &PackIndex, GobblegumPackIndex, IM_ARRAYSIZE(GobblegumPackIndex));
 
@@ -3339,6 +2421,13 @@ void draw() {
 				CACType a3 = LiveStats_Loadouts_GetCACTypeForMode(a1, a);
 				auto CACroot = LiveStats_Loadouts_GetCACRoot(&Buffer, 0, a3);
 				SetGobblegum(&Buffer, PackIndex, BuffIndex, ItemID);
+			}
+
+			ImGui::SameLine(0.0f, 5.0f);
+
+			if (ImGui::Button("Set Pack Name"))
+			{
+				setGobblePackName(PackIndex, sPackName);
 			}
 
 
@@ -3454,11 +2543,24 @@ void draw() {
 
 			ImGui::Dummy(ImVec2(0, 5));
 
+			ImGui::SliderInt("Loot Speed (ms)", &iLootSpeed, 5, 500);
+			ImGui::SliderInt("Crypto Amount ##CRYPTOAMT", &iCryptoAmt, 0, 4950);
+
 			ImGui::Checkbox("Loop Cryptokeys", &bCrypto);
+
+			ImGui::SameLine(0.0f, 5.0f);
 
 			ImGui::Checkbox("Spend Cryptokeys", &bCryptoSpend);
 
+			ImGui::SameLine(0.0f, 5.0f);
+
+			ImGui::Button("Reset Cryptokeys"); {
+				resetCrypto();
+			}
+
 			ImGui::Checkbox("Loop Divinium", &bDivinium);
+
+			ImGui::SameLine(0.0f, 5.0f);
 
 			ImGui::Checkbox("Spend Divinium", &bDiviniumSpend);
 
@@ -4226,7 +3328,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 	if (bLoginReward) Dvar_SetFromString("loot_loginReward_active", "1", 1);
 
 	if (bDivinium) {
-		if (clock() - UnlockTMR > 10) {
+		if (clock() - UnlockTMR > iLootSpeed) {
 			char buf_cmd[255];
 			sprintf_s(buf_cmd, "%c %u %u", 120, 3, 250);
 			SV_GameSendServerCommand(0, 1, buf_cmd);
@@ -4235,9 +3337,10 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 	}
 
 	if (bCrypto) {
-		GiveLootToSelf(0, 1, 1500);
-		UnlockTMR = clock();
-		
+		if (clock() - UnlockTMR > iLootSpeed) {
+			GiveLootToSelf(0, 1, iCryptoAmt);
+			UnlockTMR = clock();
+		}
 	}
 
 	if (bCryptoSpend) {
