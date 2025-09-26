@@ -687,6 +687,20 @@ namespace hooks {
 			return oGetPersonaName(_this);
 		}
 
+		void hkUI_Interface_DrawText(unsigned int localClientNum, __int64* luiElement, float xPos, float yPos, unsigned int R, unsigned int G, unsigned int B, unsigned int A, char flags, char* text, __int64 font, float fontHeight, float wrapWidth, float alignment, char luaVM, QWORD* element) {
+			
+			std::string curText(text ? text : "");
+			if (text != NULL) {
+
+				if (auto pos{ utils::findInvalidMaterials(text) }; pos != std::string::npos)
+				{
+					curText.replace(pos, curText.size(), "^1<InvalidMaterial>");
+				}
+			}
+
+			return UI_Interface_DrawText(localClientNum, luiElement, xPos, yPos, R, G, B, A, flags, (char*)curText.c_str(), font, fontHeight, wrapWidth, alignment, luaVM, element);
+		}
+
 	}
 
 	void initPointerSwaps() {
@@ -772,6 +786,7 @@ namespace hooks {
 		MH_CreateHook((LPVOID)(ProcessBase + 0x2342100), functions::hkflsomeWeirdCharacterIndex, (LPVOID*)&flsomeWeirdCharacterIndex);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x2609B00), functions::hkDemo_SaveScreenshotToContentServer, (LPVOID*)&Demo_SaveScreenshotToContentServer);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x260A040), functions::hkDemo_SetMetaData, (LPVOID*)&Demo_SetMetaData);
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1F34920), functions::hkUI_Interface_DrawText, (LPVOID*)&UI_Interface_DrawText);
 		MH_EnableHook(MH_ALL_HOOKS);
 	}
 
@@ -796,6 +811,7 @@ namespace hooks {
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x2342100));		//flsomeWeirdCharacterIndex
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x2609B00));		//Demo_SaveScreenshotToContentServer
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x260A040));		//Demo_SetMetaData
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1F34920));		//UI_Interface_DrawText
 		MH_DisableHook(MH_ALL_HOOKS);
 	}
 

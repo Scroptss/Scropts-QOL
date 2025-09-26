@@ -34,7 +34,7 @@ bool bProtectStatsRan;
 bool bCompleteEE;
 bool bArena;
 int UnlockTMR = clock();
-std::string version = "2.3.4";
+std::string version = "2.3.5";
 std::string sPackName;
 
 int minRank = 0;

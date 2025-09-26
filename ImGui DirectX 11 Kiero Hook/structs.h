@@ -438,6 +438,18 @@ private:
 	byte _0x1388C[0x41C];
 };
 
+struct materialName
+{
+	char prefix;
+	char type;
+
+	std::uint8_t width;
+	std::uint8_t height;
+	std::uint8_t length;
+
+	std::string name;
+};
+
 struct DDLMember
 {
 	const char* name;

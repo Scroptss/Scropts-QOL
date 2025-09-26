@@ -152,4 +152,126 @@ namespace utils {
 		return output.str();
 	}
 
+	FORCEINLINE bool containsIllegalChar(std::string text)
+	{
+		if (text.empty())
+		{
+			return true;
+		}
+
+		for (auto& c : text)
+		{
+			if (!::isalnum(c) && c != '$' && c != '/' && c != '_')
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	FORCEINLINE bool isInvalidMaterial(std::string name)
+	{
+		materialName material;
+
+		material.prefix = name.at(0);
+
+		if (material.prefix == '^')
+		{
+			if (name.size() > 1)
+			{
+				material.type = name.at(1);
+
+				if (material.type == 'H' || material.type == 'I')
+				{
+					if (name.size() > 5)
+					{
+						material.length = name.at(4);
+						material.name = name.substr(5, material.length);
+
+						if (material.name.size() < material.length)
+						{
+							return true;
+						}
+
+						else if (containsIllegalChar(material.name))
+						{
+							return true;
+						}
+					}
+
+					else
+					{
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+	
+	FORCEINLINE bool isInvalidButton(std::string name)
+	{
+		materialName material;
+
+		material.prefix = name.at(0);
+
+		if (material.prefix == '^')
+		{
+			if (name.size() > 1)
+			{
+				material.type = name.at(1);
+
+				if (material.type == 'B')
+				{
+					if (name.size() > 2)
+					{
+						material.name = name.substr(2);
+						material.length = material.name.find('^');
+
+						if (material.length >= 64)
+						{
+							return true;
+						}
+
+						else if (material.length == std::string::npos)
+						{
+							return true;
+						}
+					}
+
+					else
+					{
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	FORCEINLINE std::size_t findInvalidMaterials(std::string text)
+	{
+		std::size_t pos = 0u;
+
+		while ((pos = text.find('^', pos)) != std::string::npos)
+		{
+			if (isInvalidMaterial(text.substr(pos)))
+			{
+				return pos;
+			}
+
+			if (isInvalidButton(text.substr(pos)))
+			{
+				return pos;
+			}
+
+			pos++;
+		}
+
+		return std::string::npos;
+	}
+
 }
