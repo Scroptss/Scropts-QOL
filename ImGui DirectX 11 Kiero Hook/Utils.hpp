@@ -1,5 +1,6 @@
 #pragma once
 #include "includes.h"
+#include "common.h"
 #include <algorithm>
 
 namespace utils {
@@ -170,6 +171,47 @@ namespace utils {
 		return false;
 	}
 
+	FORCEINLINE bool is_invalid_model(std::string name)
+	{
+		materialName material;
+
+		material.prefix = name.at(0);
+
+		if (material.prefix == '$')
+		{
+			if (name.size() > 1)
+			{
+				material.type = name.at(1);
+
+				if (material.type == '(')
+				{
+					if (name.size() > 2)
+					{
+						material.name = name.substr(2);
+						material.length = material.name.find(')');
+
+						if (material.length >= 64)
+						{
+							return true;
+						}
+
+						else if (material.length == std::string::npos)
+						{
+							return true;
+						}
+					}
+
+					else
+					{
+						return true;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
 	FORCEINLINE bool isInvalidMaterial(std::string name)
 	{
 		materialName material;
@@ -272,6 +314,46 @@ namespace utils {
 		}
 
 		return std::string::npos;
+	}
+
+	FORCEINLINE std::size_t findInvalidModels(std::string text)
+	{
+		std::size_t pos = 0u;
+
+		while ((pos = text.find('$', pos)) != std::string::npos)
+		{
+			if (is_invalid_model(text.substr(pos)))
+			{
+				return pos;
+			}
+
+			pos++;
+		}
+
+		return std::string::npos;
+	}
+
+	FORCEINLINE uintptr_t PointerChain(uintptr_t base, std::initializer_list<uintptr_t> offsets) {
+		uintptr_t addr = base;
+		for (auto offset : offsets) {
+			if (!addr) return 0;
+			addr = *reinterpret_cast<uintptr_t*>(addr);
+			addr += offset;
+		}
+		return addr;
+	}
+
+	template<typename T>
+	T ReadValue(uintptr_t addr) {
+		if (!addr) return T();
+		return *reinterpret_cast<T*>(addr);
+	}
+
+	
+	template<typename T>
+	void WriteValue(uintptr_t addr, T value) {
+		if (!addr) return;
+		*reinterpret_cast<T*>(addr) = value;
 	}
 
 }

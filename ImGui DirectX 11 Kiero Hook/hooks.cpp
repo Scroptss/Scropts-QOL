@@ -696,6 +696,11 @@ namespace hooks {
 				{
 					curText.replace(pos, curText.size(), "^1<InvalidMaterial>");
 				}
+
+				if (auto pos{ utils::findInvalidModels(text) }; pos != std::string::npos)
+				{
+					curText.replace(pos, curText.size(), "^1<InvalidModel>");
+				}
 			}
 
 			return UI_Interface_DrawText(localClientNum, luiElement, xPos, yPos, R, G, B, A, flags, (char*)curText.c_str(), font, fontHeight, wrapWidth, alignment, luaVM, element);
@@ -786,7 +791,6 @@ namespace hooks {
 		MH_CreateHook((LPVOID)(ProcessBase + 0x134CD50), functions::hkCL_ConnectionlessCMD, (LPVOID*)&CL_ConnectionlessCMD);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1321110), functions::hkLobbyMsgRW_PackageElement, (LPVOID*)&LobbyMsgRW_PackageElement);
 		//MH_CreateHook((LPVOID)(ProcessBase + 0x143A600), functions::hkdwInstantDispatchMessage, (LPVOID*)&dwInstantDispatchMessage);
-		//MH_CreateHook((LPVOID)(ProcessBase + 0x1F34920), functions::hkUI_Interface_DrawText, (LPVOID*)&UI_Interface_DrawText);
 
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1980960), functions::hkG_Damage, (LPVOID*)&G_Damage);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1D1CC10), functions::hkR_ConvertColorToBytes, (LPVOID*)&R_ConvertColorToBytes);

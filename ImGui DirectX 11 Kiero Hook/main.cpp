@@ -73,7 +73,7 @@ static int iHighestRound = 0;
 static int iTotalRounds = 0;
 
 static int map = 0;
-static int setRound = 0;
+static int setRound = 1;
 uintptr_t spoofAddr = 0;
 
 static void HelpMarker(const char* desc)
@@ -987,8 +987,6 @@ void unlockSpecialistOutfits() {
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
-	path[0] = "PlayerStatsList";
-	path[2] = "statValue";
 	char result[2000];
 
 	for (int l = 0; l < 12; l++)
@@ -1006,11 +1004,11 @@ void unlockSpecialistOutfits() {
 		{
 			path[3] = p3[k];
 			path[4] = "statValue";
-			DDL_MoveToPath(tmp, result, 3, path);
+			DDL_MoveToPath(tmp, result, 5, path);
 			DDL_SetUInt((__int64)result, a1, 1010050000);
 			ZeroMemory(result, sizeof(result));
 			path[4] = "challengeValue";
-			DDL_MoveToPath(tmp, result, 3, path);
+			DDL_MoveToPath(tmp, result, 5, path);
 			DDL_SetUInt((__int64)result, a1, 1010050000);
 			ZeroMemory(result, sizeof(result));
 		}
@@ -1436,25 +1434,27 @@ static void setMapEE(int map) {
 	const char* zmMaps[12] = { "darkops_zod_ee", "darkops_factory_ee", "darkops_castle_ee", "darkops_island_ee", "darkops_stalingrad_ee", "darkops_genesis_ee", "darkops_zod_super_ee", "darkops_factory_super_ee", "darkops_castle_super_ee", "darkops_island_super_ee", "darkops_stalingrad_super_ee", "darkops_genesis_super_ee" };
 	char result[2000];
 
+	int amt = (setRound) ? 50000 : 0;
+
 	if (map > 6) map = 6;
 
 	path[0] = "playerstatslist";
 	path[1] = zmMaps[map];
 	path[2] = "statValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, 50000);
+	DDL_SetUInt((__int64)result, a1, amt);
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, 50000);
+	DDL_SetUInt((__int64)result, a1, amt);
 
 	path[0] = "playerstatslist";
 	path[1] = zmMaps[map + 6];
 	path[2] = "statValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, 50000);
+	DDL_SetUInt((__int64)result, a1, amt);
 	path[2] = "challengeValue";
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, 50000);
+	DDL_SetUInt((__int64)result, a1, amt);
 
 }
 
@@ -1496,7 +1496,7 @@ void setMapStat(int map, int round) {
 	LiveStorage_UploadStatsForController(0);
 }
 
-void setMaxMapStats() {
+void setMaxMapStats(int round) {
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
@@ -1509,7 +1509,7 @@ void setMaxMapStats() {
 	for (int l = 0; l < 14; l++) {
 		path[1] = zmmapnames[l];
 		DDL_MoveToPath(tmp, result, 5, path);
-		DDL_SetUInt((__int64)result, a1, 999);
+		DDL_SetUInt((__int64)result, a1, round);
 		ZeroMemory(result, sizeof(result));
 	}
 	LiveStorage_UploadStatsForController(0);
@@ -2288,6 +2288,32 @@ void draw() {
 
 			}
 
+			ImGui::Separator();
+
+			ImGui::Dummy(ImVec2(0, 5));
+
+			
+			if (ImGui::Button("Fast Restart Map")) {
+				Cbuf_AddText(0, "fast_restart");
+			}
+
+			ImGui::SameLine(0.0f,3.0f);
+
+			if (ImGui::Button("Full Restart Map")) {
+				Cbuf_AddText(0, "map_restart");
+			}
+
+			ImGui::SameLine(0.0f,3.0f);
+
+			if (ImGui::Button("No Teddy Bear")) {
+				Dvar_SetFromString("sv_cheats", "1", false);
+				Dvar_SetFromString("magic_chest_movable", "0", false);
+				Dvar_SetFromString("sv_cheats", "0", false);
+			}
+
+
+			
+
 			ImGui::Checkbox("First Gum Free", &bFirstGumFree);
 
 			if (bFirstGumFree && !bFirstGumFreeRan) {
@@ -2303,24 +2329,51 @@ void draw() {
 
 			HelpMarker("Relive the OG days where the first gobblegum wasn't free!");
 
-			if (ImGui::Button("Fast Restart Map")) {
-				Cbuf_AddText(0, "fast_restart");
-			}
+			ImGui::Checkbox("Sv_Cheats", &bsvCheats);
 
-			if (ImGui::Button("Full Restart Map")) {
-				Cbuf_AddText(0, "map_restart");
-			}
-
-			if (ImGui::Button("No Teddy Bear")) {
+			if (bsvCheats && !bsvCheatsRan) {
 				Dvar_SetFromString("sv_cheats", "1", false);
-				Dvar_SetFromString("magic_chest_movable", "0", false);
-				Dvar_SetFromString("sv_cheats", "0", false);
+				bsvCheatsRan = true;
 			}
 
-			ImGui::Checkbox("God Mode##DMG", &bGodMode);
-			//ImGui::SameLine();
+			if (!bsvCheats && bsvCheatsRan) {
+				Dvar_SetFromString("sv_cheats", "0", false);
+				bsvCheatsRan = false;
+			}
+			ImGui::SameLine();
+
+			HelpMarker("Toggle server cheats to run console commands like noclip or godmode");
+
+			ImGui::SameLine(0.0f,3.0f);
+
+			ImGui::Checkbox("God Mode", &bGodMode);
+
+			if (bGodMode && !bGodModeRan) {
+				Cbuf_AddText(0, "god");
+				bGodModeRan = true;
+			}
+
+			if (!bGodMode && bGodModeRan) {
+				Cbuf_AddText(0, "god");
+				bGodModeRan = false;
+			}
+
+			ImGui::SameLine(0.0f, 3.0f);
+
+			ImGui::Checkbox("Inf Ammo", &bInfAmmo);
+
+			if (bInfAmmo && !bInfAmmoRan) {
+				Dvar_SetFromString("player_sustainAmmo", "1", false);
+				bInfAmmoRan = true;
+			}
+
+			if (!bInfAmmo && bInfAmmoRan) {
+				Dvar_SetFromString("player_sustainAmmo", "0", false);
+				bInfAmmoRan = false;
+			}
+
 			ImGui::Checkbox("Thorns Mode##DMG", &bThorns);
-			//ImGui::SameLine();
+			ImGui::SameLine(0.0f, 3.0f);
 			ImGui::Checkbox("Nukes Mode##DMG", &bNukes);
 			//ImGui::SameLine();
 			ImGui::Checkbox("##DMG", &bDamageMultiplier);
@@ -2346,24 +2399,26 @@ void draw() {
 
 			ImGui::SameLine(0.0f, 5.0f);
 
-			if (ImGui::Button("Set EE Complete##MAP")) {
+
+			if (ImGui::Button("Set all Maps##MAP")) {
+				setMaxMapStats(setRound);
+			}
+
+			if (ImGui::Button("Set EE##MAP")) {
 
 				setMapEE(map);
 
 				LiveStorage_UploadStatsForController(0);
 			}
-
-
-			if (ImGui::Button("Max all Maps##MAP")) {
-				setMaxMapStats();
-			}
-
-
 			ImGui::SameLine(0.0f, 5.0f);
 
-			if (ImGui::Button("Complete All EEs##MAP")) {
+			if (ImGui::Button("Set All EEs##MAP")) {
 				setAllMapEE();
 			}
+
+			ImGui::SameLine(0.0f, 0.0f);
+
+			HelpMarker("Set round to 0 to clear all EEs.");
 
 			ImGui::Separator();
 
