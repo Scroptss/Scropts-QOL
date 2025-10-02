@@ -350,12 +350,12 @@ int getComboItemSize(bool isPrimary) {
 	return 0;
 }
 
-const char* getComboItemName(int index, bool isPrimary) {
+const char* getComboItemName(int index, bool isPrimary, int type) {
 
 	std::string baseName;
 	std::string displayName;	
 
-	switch (iComboBoxType) {
+	switch (type) {
 	
 	case CBC_ATTACHMENTS:
 	{
@@ -895,7 +895,7 @@ void setMaxWeapons() {
 		std::vector<const char*> base = { "itemstats", intToConstCharPtr(i) };
 
 		SetValue(root, ctx, toState, { base[0], base[1], "purchased" }, 3);
-		SetValue(root, ctx, toState, { base[0], base[1], "xp" }, 65535);
+		SetValue(root, ctx, toState, { base[0], base[1], "xp" }, 665535);
 		SetValue(root, ctx, toState, { base[0], base[1], "plevel" }, 15);
 
 		for (int j = 0; j < 3; j++)
@@ -1443,6 +1443,45 @@ void resetCrypto() {
 	DDL_MoveToName(tmp, result, "mp_loot_xp_due");
 	DDL_SetUInt((__int64)result, a1, 0);
 	LiveStorage_UploadStatsForController(0);
+}
+
+void setMaxAttachments() {
+	auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
+	auto ctx = GetStatsBuffer(0);
+	char toState[2000]{};
+
+
+	for (int i = 0; i < 44; i++) {
+		std::vector<const char*> base = { "Attachments", BG_GetAttachmentName(i)};
+
+		SetValue(root, ctx, toState, { base[0], base[1], "purchased" }, 3);
+		SetValue(root, ctx, toState, { base[0], base[1], "xp" }, 665535);
+		SetValue(root, ctx, toState, { base[0], base[1], "plevel" }, 15);
+
+		for (int j = 0; j < 3; j++)
+			SetValue(root, ctx, toState, { base[0], base[1], "isproversionunlocked" }, 3);
+
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "headshots", "statValue" }, 7195000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "headshots", "challengeValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "assists", "statValue" }, 7195000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "assists", "challengeValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "kills", "statValue" }, 7195000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "kills", "challengeValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "challenges", "statValue" }, 6);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "challenges", "challengeValue" }, 6);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "backstabber_kill", "statValue" }, 75000);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "backstabber_kill", "challengeValue" }, 10);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "accuracy", "statValue" }, 100);
+		SetValue(root, ctx, toState, { base[0], base[1], "stats", "accuracy", "challengeValue" }, 1);
+
+		for (int j = 0; j < 8; j++) {
+			char buf[32];
+			sprintf_s(buf, "challenge%d", j);
+			SetValue(root, ctx, toState, { base[0], base[1], "stats", buf }, 50000);
+			SetValue(root, ctx, toState, { base[0], base[1], "stats", buf, "challengeValue" }, 50000);
+		}
+	}
+
 }
 
 // ZM
@@ -2198,6 +2237,7 @@ void draw() {
 
 				setMaxWeapons();
 				setGroupStats();
+				setMaxAttachments();
 				LiveStorage_UploadStatsForController(0);
 			}
 
@@ -2329,15 +2369,7 @@ void draw() {
 			}
 
 			ImGui::SameLine(0.0f,3.0f);
-
-			if (ImGui::Button("No Teddy Bear")) {
-				Dvar_SetFromString("sv_cheats", "1", false);
-				Dvar_SetFromString("magic_chest_movable", "0", false);
-				Dvar_SetFromString("sv_cheats", "0", false);
-			}
-
-
-			
+		
 
 			ImGui::Checkbox("First Gum Free", &bFirstGumFree);
 
@@ -2373,16 +2405,6 @@ void draw() {
 
 			ImGui::Checkbox("God Mode", &bGodMode);
 
-			if (bGodMode && !bGodModeRan) {
-				Cbuf_AddText(0, "god");
-				bGodModeRan = true;
-			}
-
-			if (!bGodMode && bGodModeRan) {
-				Cbuf_AddText(0, "god");
-				bGodModeRan = false;
-			}
-
 			ImGui::SameLine(0.0f, 3.0f);
 
 			ImGui::Checkbox("Inf Ammo", &bInfAmmo);
@@ -2397,6 +2419,10 @@ void draw() {
 				bInfAmmoRan = false;
 			}
 
+			if (ImGui::Button("No Teddy Bear")) {
+				Dvar_SetFromString("magic_chest_movable", "0", false);
+			}
+
 			ImGui::Checkbox("Thorns Mode##DMG", &bThorns);
 			ImGui::SameLine(0.0f, 3.0f);
 			ImGui::Checkbox("Nukes Mode##DMG", &bNukes);
@@ -2404,7 +2430,7 @@ void draw() {
 			ImGui::Checkbox("##DMG", &bDamageMultiplier);
 
 			ImGui::SameLine();
-			ImGui::SliderInt("DMG Multiplier", &iDamageMultiplier, 1, 100);
+			ImGui::SliderInt("DMG Multiplier", &iDamageMultiplier, 1, 10000);
 
 			ImGui::Separator();
 
@@ -2451,9 +2477,9 @@ void draw() {
 
 			ImGui::BulletText("Gobblegum Editor");
 
-			static int ItemID;
+			static int BgbID;
 
-			const char* ItemName = getItemNameforItemID(ItemID);
+			const char* ItemName = getItemNameforItemID(BgbID);
 
 			const char* GobblegumPackIndex[10]{
 					"Pack 1",
@@ -2487,9 +2513,25 @@ void draw() {
 			ImGui::SetNextItemWidth(250);
 			ImGui::Combo("Slot", &BuffIndex, GobblegumBuffIndex, IM_ARRAYSIZE(GobblegumBuffIndex));
 
-			ImGui::InputInt("Item ID##GOBBLE", &ItemID);
+			static std::string previewBGBValue = "";
 
-			ImGui::Text(ItemName);
+			if (ImGui::BeginCombo("Gobblegum##BGB", previewBGBValue.c_str()))
+			{
+				for (int i = 0; i < 250; i++) {
+
+					std::string itemName = getItemNameforItemID(i);
+
+					if (!itemName.empty()) {
+						ImGui::Selectable(itemName.c_str());
+						if (ImGui::IsItemClicked()) {
+							previewBGBValue = itemName;
+							BgbID = i;
+						}
+
+					}
+				}
+				ImGui::EndCombo();
+			}
 
 			if (ImGui::Button("Set Gobblegum"))
 			{
@@ -2500,7 +2542,7 @@ void draw() {
 				eModes a1 = Com_SessionMode_GetMode();
 				CACType a3 = LiveStats_Loadouts_GetCACTypeForMode(a1, a);
 				auto CACroot = LiveStats_Loadouts_GetCACRoot(&Buffer, 0, a3);
-				SetGobblegum(&Buffer, PackIndex, BuffIndex, ItemID);
+				SetGobblegum(&Buffer, PackIndex, BuffIndex, BgbID);
 			}
 
 			ImGui::SameLine(0.0f, 5.0f);
@@ -2599,8 +2641,45 @@ void draw() {
 
 			const char* ShowcaseWeaponName = getItemNameforItemID(weaponIndex);
 			ImGui::BulletText("Showcase Weapon: %s",ShowcaseWeaponName);
-			ImGui::InputInt("Weapon ID##SHOWCASE", &weaponIndex);
-			ImGui::InputInt("Camo ID##SHOWCASE", &camoIndex);
+
+			static std::string previewWeapValue = "";
+			static std::string previewCamoValue = "";
+
+			if (ImGui::BeginCombo("Showcase Weapon##SHOWCASE", previewWeapValue.c_str()))
+			{
+				for (int i = 0; i < 250; i++) {
+
+					std::string itemName = getItemNameforItemID(i);
+
+					if (!itemName.empty()) {
+						ImGui::Selectable(itemName.c_str());
+						if (ImGui::IsItemClicked()) {
+							previewWeapValue = itemName;
+							weaponIndex = i;
+						}
+					
+					}
+				}
+				ImGui::EndCombo();
+			}
+
+			if (ImGui::BeginCombo("Showcase Weapon Camo##SHOWCASE", previewCamoValue.c_str()))
+			{
+				for (int i = 0; i < 138; i++) {
+
+					auto itemName = getComboItemName(i, false, CBC_CAMOS);
+
+					if (itemName != nullptr) {
+						ImGui::Selectable(itemName);
+						if (ImGui::IsItemClicked()) {
+							previewCamoValue = itemName;
+							camoIndex = i;
+						}					
+					}
+				}
+				ImGui::EndCombo();
+			}
+			//ImGui::InputInt("Camo ID##SHOWCASE", &camoIndex);
 
 			if (ImGui::Button("Set Showcase Weapon")) {
 
@@ -2753,8 +2832,11 @@ void draw() {
 				ImGui::SetTooltip("Spoof extra slot ownership. Gives you 10 CAC tabs and allows you\nto download / create more emblems, paintjobs, etc.");
 			}
 
-			// Make a checkbox.
 			ImGui::Checkbox("Fileshare Downloading", &bFileshareDownloading);
+
+			if (ImGui::Button("Show Hidden Items")) {
+				unlock_secret_items();
+			}
 
 			if (bFileshareDownloading && !bFileshareDownloadingRan) {
 				runDvars(FILESHARE_ALLOWDOWNLOAD);
@@ -3120,7 +3202,7 @@ void draw() {
 
 								for (int i = 0; i < primaryLimit; i++) {
 
-									auto selectableLabel = getComboItemName(i, true);
+									auto selectableLabel = getComboItemName(i, true, iComboBoxType);
 
 									if (selectableLabel != nullptr) {
 
@@ -3129,7 +3211,7 @@ void draw() {
 
 										ImGui::Selectable(finalLabel.c_str(), isSelected);
 										if (ImGui::IsItemClicked()) {
-											primaryPreviews[j] = getComboItemName(i, true);
+											primaryPreviews[j] = getComboItemName(i, true, iComboBoxType);
 											primarySelectedItems[j] = i;
 											primarySelectedSlot[j] = iComboBoxType;
 										}
@@ -3184,7 +3266,7 @@ void draw() {
 
 								for (int i = 0; i < limit; i++) {
 
-									auto selectableLabel = getComboItemName(i, false);
+									auto selectableLabel = getComboItemName(i, false, iComboBoxType);
 
 									if (selectableLabel != nullptr) {
 
@@ -3193,7 +3275,7 @@ void draw() {
 
 										ImGui::Selectable(finalLabel.c_str(), isSelected);
 										if (ImGui::IsItemClicked()) {
-											secondaryPreviews[j] = getComboItemName(i, false);
+											secondaryPreviews[j] = getComboItemName(i, false, iComboBoxType);
 											secondarySelectedItems[j] = i;
 											secondarySelectedSlot[j] = iComboBoxType;
 										}
@@ -3244,7 +3326,7 @@ void draw() {
 
 								for (int i = 0; i < limit; i++) {
 
-									auto selectableLabel = getComboItemName(i, false);
+									auto selectableLabel = getComboItemName(i, false, iComboBoxType);
 
 									if (selectableLabel != nullptr) {
 
@@ -3253,7 +3335,7 @@ void draw() {
 
 										ImGui::Selectable(finalLabel.c_str(), isSelected);
 										if (ImGui::IsItemClicked()) {
-											offhandPreviews[j] = getComboItemName(i, false);
+											offhandPreviews[j] = getComboItemName(i, false, iComboBoxType);
 											offhandSelectedItems[j] = i;
 											offhandSelectedSlot[j] = iComboBoxType;
 										}
@@ -3308,7 +3390,7 @@ void draw() {
 
 								for (int i = 0; i < limit; i++) {
 
-									auto selectableLabel = getComboItemName(i, false);
+									auto selectableLabel = getComboItemName(i, false, iComboBoxType);
 
 									if (selectableLabel != nullptr) {
 
@@ -3317,7 +3399,7 @@ void draw() {
 
 										ImGui::Selectable(finalLabel.c_str(), isSelected);
 										if (ImGui::IsItemClicked()) {
-											wildcardPreviews[j] = getComboItemName(i, false);
+											wildcardPreviews[j] = getComboItemName(i, false, iComboBoxType);
 											wildcardSelectedItems[j] = i;
 											wildcardSelectedSlot[j] = iComboBoxType;
 										}

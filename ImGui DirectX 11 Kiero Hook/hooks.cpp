@@ -464,39 +464,32 @@ namespace hooks {
 			auto g_entityP3 = (__int64)(g_entity + 0x9F0);
 			auto g_entityP4 = (__int64)(g_entity + 0xEE8);
 			auto newDamage = (int)(damage * iDamageMultiplier);
+			auto isPlayer = targ == g_entity || targ == g_entityP2 || targ == g_entityP3 || targ == g_entityP4;
 
 			if (LobbyTypes_GetMainMode() == LOBBY_MAINMODE_ZM && inflictor != NULL && attacker != NULL) {
 
-				if (targ == g_entity || targ == g_entityP2 || targ == g_entityP3 || targ == g_entityP4) {
+				if (isPlayer) {
 
 					if (bThorns) {
-
-						if (bNukes) {
-							for (int i = 4; i < 2047; ++i) {
-								__int64 target = static_cast<__int64>(g_entity) + (0x4F8 * i);
-								spoof_call(spoof_t, G_Damage, target, targ, targ, a4, a5, (int)9999999, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
-							}
-						}
-
-						spoof_call(spoof_t, G_Damage, attacker, targ, targ, a4, a5, newDamage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
-					}
-
-					if (bGodMode) {
-						return 0;
+						return spoof_call(spoof_t, G_Damage, attacker, targ, targ, a4, a5, newDamage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
 					}
 				}
-				else {
-					if (bDamageMultiplier) {
-						return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, newDamage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
-					}				
 
-					if (bNukes) {
-						for (int i = 4; i < 2047; ++i) {
-							__int64 target = static_cast<__int64>(g_entity) + (0x4F8 * i);
-							spoof_call(spoof_t, G_Damage, target, inflictor, attacker, a4, a5, (int)9999999, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
-						}
+				if (bNukes) {
+					for (int i = 4; i < 2047; ++i) {
+						__int64 target = static_cast<__int64>(g_entity) + (0x4F8 * i);
+						spoof_call(spoof_t, G_Damage, target, inflictor, attacker, a4, a5, (int)9999999, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
 					}
 				}
+
+				if (bDamageMultiplier && !isPlayer) {
+					return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, newDamage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
+				}
+
+				if (bGodMode) {
+					return 0;
+				}
+			
 			}
 
 			return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, damage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
