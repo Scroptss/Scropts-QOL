@@ -34,7 +34,7 @@ bool bProtectStatsRan;
 bool bCompleteEE;
 bool bArena;
 int UnlockTMR = clock();
-std::string version = "2.3.5";
+std::string version = "2.3.6";
 std::string sPackName;
 
 int minRank = 0;
@@ -631,6 +631,27 @@ void setMaxTokens() {
 
 
 // Campaign 
+
+void UnlockAllMedals() {
+	using namespace std;
+
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
+	const char* path[8];
+	auto a1 = GetStatsBuffer(0);
+	path[0] = "PlayerCPDecorations";
+	char result[2000];
+
+	for (int i = 0; i < 12; i++) {
+		path[1] = intToConstCharPtr(i);
+		path[2] = "medalEarned";
+		DDL_MoveToPath(tmp, result, 3, path);
+		DDL_SetUInt((__int64)result, a1, 1);
+		ZeroMemory(result, size(result));
+		
+	}
+	LiveStorage_UploadStatsForController(0);
+
+}
 
 void UnlockAllAccolades() {
 
@@ -1864,7 +1885,7 @@ void draw() {
 
 		ImGui::SetNextWindowSize(ImVec2(650.0f, 350.0f));
 
-		std::string title = std::string(" - Scropts QOL for BO3 (") + KeybindNames[selectedBind] + ") - ";
+		std::string title = std::string(" - Scropts QOL for BO3 - ");
 
 		ImGui::Begin(title.c_str(), &open);
 
@@ -2231,6 +2252,10 @@ void draw() {
 
 			if (ImGui::Button("Max Accolades")) {
 				UnlockAllAccolades();
+			}
+
+			if (ImGui::Button("Max Medals")) {
+				UnlockAllMedals();
 			}
 
 			ImGui::TextDisabled("Suggest more unlocks");
