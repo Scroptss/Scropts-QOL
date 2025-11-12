@@ -1362,28 +1362,30 @@ void unlockContracts(int index, int max, int type) {
 		path[2] = "active";
 
 		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-			DDL_SetUInt((__int64)toState, DDLContext, 3);
+			DDL_SetUInt((__int64)toState, DDLContext, 1);
 			ZeroMemory(toState, sizeof(toState));
 		}
 
 		path[2] = "index";
 
 		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-			DDL_SetUInt((__int64)toState, DDLContext, index);
+			auto iContractID = std::stoi(ContractID);
+			DDL_SetUInt((__int64)toState, DDLContext, iContractID);
 			ZeroMemory(toState, sizeof(toState));
 		}
 
 		path[2] = "progress";
 
 		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-			DDL_SetUInt((__int64)toState, DDLContext, std::stoi(ChallengeValue));
+			auto iChallengeValue = std::stoi(ContractID);
+			DDL_SetUInt((__int64)toState, DDLContext, iChallengeValue);
 			ZeroMemory(toState, sizeof(toState));
 		}
 
 		path[2] = "award_given";
 
 		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-			DDL_SetUInt((__int64)toState, DDLContext, 3);
+			DDL_SetUInt((__int64)toState, DDLContext, 1);
 			ZeroMemory(toState, sizeof(toState));
 		}
 
@@ -1394,7 +1396,7 @@ void unlockContracts(int index, int max, int type) {
 			statPath[2] = "statValue";
 
 			if (DDL_MoveToPath(RootState, toState, 3, statPath)) {
-				DDL_SetUInt((__int64)toState, DDLContext, 3);
+				DDL_SetUInt((__int64)toState, DDLContext, 1);
 				ZeroMemory(toState, sizeof(toState));
 			}
 
@@ -1407,7 +1409,7 @@ void unlockContracts(int index, int max, int type) {
 			statPath[2] = "statValue";
 
 			if (DDL_MoveToPath(RootState, toState, 3, statPath)) {
-				DDL_SetUInt((__int64)toState, DDLContext, 3);
+				DDL_SetUInt((__int64)toState, DDLContext, 1);
 				ZeroMemory(toState, sizeof(toState));
 			}
 
@@ -1418,14 +1420,15 @@ void unlockContracts(int index, int max, int type) {
 			const char* sepPath[8]{};
 
 			// Split the string into sep parts
-			auto sep = utils::splitString(ExtraBytes);
+			//auto sep = utils::splitString(ExtraBytes);
+			std::vector<std::string> sep = split(ExtraBytes, ' ');
 
 			for (int i = 0; i < sep.size(); i++) {
 				sepPath[i] = sep[i].data();
 			}
 
 			if (DDL_MoveToPath(RootState, toState, 2, sepPath)) {
-				DDL_SetUInt((__int64)toState, DDLContext, 3);
+				DDL_SetUInt((__int64)toState, DDLContext, 1);
 				ZeroMemory(toState, sizeof(toState));
 			}
 
