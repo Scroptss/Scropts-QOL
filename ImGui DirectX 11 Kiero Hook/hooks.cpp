@@ -1,9 +1,10 @@
 #include "hooks.h"
+#include "crc.h"
 
 namespace hooks {
 
-	DWORD_PTR pUserData = ProcessBase + 0x14FB3420;
-	DWORD_PTR pNameBuffer = ProcessBase + 0x15E84638;
+	DWORD_PTR pUserData = ProcessBase + 0x14F344B0;
+	DWORD_PTR pNameBuffer = ProcessBase + 0x15E056C8;
 
 	typedef uint64_t AppId_t;
 	typedef bool(__fastcall* ReadP2PPacket_t)(uintptr_t thisptr, void* pub_dest, unsigned int cub_dest, unsigned int* cub_msg_size, unsigned __int64* steam_id_remote, int n_channel);
@@ -12,11 +13,9 @@ namespace hooks {
 	Steam_bIsDlcInstalled_t Steam_bIsDlcInstalled_o;
 	typedef bool(__fastcall* Steam_bIsAppInstalled_t)(__int64 thisPtr, uint64_t appID);
 	Steam_bIsAppInstalled_t Steam_bIsAppInstalled_o;
-	
 
 	std::unordered_map<AppId_t, bool> dlcCache;
 	std::unordered_map<AppId_t, bool> appCache;
-
 	std::vector<int> config_strings = { 3514, 3627 };
 
 	uintptr_t jpg_buf_o = NULL;
@@ -25,11 +24,80 @@ namespace hooks {
 	uint32_t custom_thumb_buf_size = 0;
 	char* custom_thumb_buf = new char[0x88000];
 
+	bool is_user_in_game()
+	{
+		return Live_IsUserInGame(0);
+	}
+
+	bool local_client_is_in_game()
+	{
+		return CL_IsLocalClientInGame(0);
+	}
+
+	bool is_in_game()
+	{
+		return Com_IsInGame();
+	}
+
+	bool is_match_loaded()
+	{
+		return (is_user_in_game() && local_client_is_in_game() && is_in_game());
+	}
+
+	bool is_user_in_lobby()
+	{
+		return (!Live_IsUserInGame(0) && Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0));
+	}
+
+	bool AreWeInGameAndHosting() {
+
+		bool rt = false;
+
+		if (is_match_loaded() && Live_AreWeHost()) {
+			return true;
+		}
+		return rt;
+
+	}
+
+	ImVec2 WorldToScreen(ImVec3 vWorldLocation, int type)
+	{
+
+		if (type == 1)
+		{
+			float world[3];
+			world[0] = vWorldLocation.x;
+			world[1] = vWorldLocation.y;
+			world[2] = vWorldLocation.z;
+			float out[3];
+			spoof_call(spoof_t, WorldPosToScreenPos, 0, world, out);
+
+			return { out[0], out[1] };
+
+		}
+	
+
+		return { 0, 0 };
+	}
+
+	ImVec3 CG_DObjGetWorldTagPos(__int64 centity_t, __int64 DObj, int tag, float* whatever)
+	{
+		ImVec3 pos;
+		float WORLD[3];
+		auto DOBJ = CG_DObjGetWorldTagPosInternal(centity_t, DObj, tag, whatever, WORLD, 0xFFFF);
+
+		pos.x = WORLD[0];
+		pos.y = WORLD[1];
+		pos.z = WORLD[2];
+
+		return pos;
+	}
+
 	void load_custom_jpg()
 	{
 		if (custom_jpg_buf)
 		{
-			*(uint64_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8498) = NULL;
+			*(uint64_t*)(*(uint64_t*)(ProcessBase + 0x1976CA80) + 0x5A8498) = NULL;
 			custom_jpg_buf = NULL;
 			custom_jpg_buf_size = 0;
 		}
@@ -81,8 +149,57 @@ namespace hooks {
 
 	namespace functions {
 
-		// Patches 
+		// Patches
 
+		char hkCom_Error(const char* a1, int a2, unsigned int a3, const char* fmt, ...)
+		{
+			void* ret = _ReturnAddress();
+			uintptr_t baseAddr = (uintptr_t)GetModuleHandle(NULL);
+			uintptr_t relativeAddr = (uintptr_t)ret - baseAddr;
+			va_list args;
+			va_start(args, fmt);
+
+			if (ret == (void*)OFFSET(0x20F0227))
+			{
+
+				const char* mapName = va_arg(args, const char*);
+				const char* error = va_arg(args, const char*);
+
+				va_end(args);
+
+				static char buffer[1024];
+				snprintf(buffer, sizeof(buffer),
+					"^1DLC SPOOF ERROR: ^7%s\n\n^7Cannot load DLC files, Have you downloaded ^2%s's ^7files and placed them in your Zone Folder?\n\n ^8C:\\Program Files (x86)\\Steam\\steamapps\\common\\Call of Duty Black Ops III\\zone",
+					error ? error : "null",				
+				mapName ? mapName : "null");
+
+				return Com_Error(a1, a2, a3, "%s", buffer);
+
+			}
+
+			if (ret == (void*)OFFSET(0x1EB0E44))
+			{
+				const char* error = va_arg(args, const char*);
+				int errorCode = va_arg(args, int);
+				va_end(args);
+
+				static char buffer[1024];
+				snprintf(buffer, sizeof(buffer),
+					"^1MULTIPLAYER STAT PROTECTION:^7 [%d]\n\n^7To go backwards in rank, do a ^2Fresh Restart\n\n^8Menu -> Barracks -> Multiplayer -> Prestige Options -> Fresh Restart\n\n^7Stuck on a bugged rank? You can ^2Freeze ^7your stats, set Prestige 1,\ngo to Fresh Restart, ^1Unfreeze^7 stats, then Fresh Restart!", errorCode);				
+
+				return Com_Error(a1, a2, a3, "%s", buffer);
+
+			}
+
+			char fallbackBuffer[2048];
+			vsnprintf(fallbackBuffer, sizeof(fallbackBuffer), fmt, args);
+			utils::write_log("[Com_Error] Relative Return Address: 0x%llX\nError Message: %s", relativeAddr, fallbackBuffer);
+			va_end(args);
+
+			return Com_Error(a1, a2, a3, "%s", fallbackBuffer);
+			
+		}
+					
 		const char* __fastcall hkCL_GetConfigString(std::int32_t configStringIndex)
 		{
 
@@ -97,7 +214,6 @@ namespace hooks {
 
 				}
 			}
-
 			return CL_GetConfigString(configStringIndex);
 		}
 
@@ -169,7 +285,7 @@ namespace hooks {
 						return false;
 					}
 
-					if (game_im == 'e')
+					if (game_im == 101 || game_im == 109) // cbuf
 					{
 						ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "[Instant Message] Remote cbuf attempt caught from (%llu) with size [%u]", *steam_id_remote, *cub_msg_size });
 
@@ -280,17 +396,12 @@ namespace hooks {
 									}
 								}
 							}
-
-
-
-
 						}
 
 						LobbyMsg_HandleIM(0, sender_id, data, size);
 					}
 				}
 			}
-
 		}
 
 		__int64 hkdwInstantDispatchMessage(__int64 sender_id, unsigned int controllerIndex, __int64 msg, unsigned int messageSize)
@@ -355,13 +466,31 @@ namespace hooks {
 
 			auto desiredColor = bUIRgb ? (ImVec4)mainRgb() : (ImVec4)uiColor;
 
+			desiredColor.w = color->w;
+
 			void* returnAddress = _ReturnAddress();
 
-			if (bColoredUI && returnAddress != nullptr && color->w > 0.1f) {
+			//return R_ConvertColorToBytes(&desiredColor, bytes);
 
-				if (returnAddress == (void*)(ProcessBase + 0x1F34A23) || returnAddress == (void*)(ProcessBase + 0x1CD998F) || returnAddress == (void*)(ProcessBase + 0x2814DC7)
-					|| returnAddress == (void*)(ProcessBase + 0x1CD92A7) || returnAddress == (void*)(ProcessBase + 0x1CD9FB3) || returnAddress == (void*)(ProcessBase + 0x228192A)) {
-					return R_ConvertColorToBytes(&desiredColor, bytes);
+			if (bColoredUI && returnAddress != nullptr) {
+
+				if (returnAddress == (void*)(ProcessBase + 0x1F28963) || returnAddress == (void*)(ProcessBase + 0x1CCDD8C) || returnAddress == (void*)(ProcessBase + 0x279C317)
+					|| returnAddress == (void*)(ProcessBase + 0x1CCCED7) || returnAddress == LPVOID(ProcessBase + 0x134DA0F) ) {
+
+					float brightness = 0.299f * color->x + 0.587f * color->y + 0.114f * color->z;
+
+					if (brightness > 0.7f) {
+						return R_ConvertColorToBytes(&desiredColor, bytes);
+					}
+
+					auto darkDesired = ImVec4(
+						desiredColor.x * 0.1f,
+						desiredColor.y * 0.1f,
+						desiredColor.z * 0.1f,
+						desiredColor.w
+					);
+
+					return R_ConvertColorToBytes(&darkDesired, bytes);
 				}
 
 			}
@@ -433,6 +562,13 @@ namespace hooks {
 			return LiveInventory_AreExtraSlotsPurchased(controllerIndex);
 		}
 
+		bool hkLiveInventory_IsValid(ControllerIndex_t controllerIndex) {
+
+
+
+			return true;
+		}
+
 		bool hkLiveEntitlements_IsEntitlementActiveForController(ControllerIndex_t controllerIndex, int incentiveId) {
 
 			if (bSpoofPurchases) return true;
@@ -459,7 +595,7 @@ namespace hooks {
 
 		__int64 hkG_Damage(__int64 targ, __int64 inflictor, __int64 attacker, __int64 a4, __int64 a5, int damage, int a7, int a8, __int64 a9, int a10, __int64 a11, int a12, int a13, int a14, __int16 a15, int a16, __int64 a17) {
 
-			auto g_entity = *(__int64*)(ProcessBase + 0x1770D4E8);
+			auto g_entity = *(__int64*)(ProcessBase + 0x1768E578);
 			auto g_entityP2 = (__int64)(g_entity + 0x4F8);
 			auto g_entityP3 = (__int64)(g_entity + 0x9F0);
 			auto g_entityP4 = (__int64)(g_entity + 0xEE8);
@@ -475,7 +611,7 @@ namespace hooks {
 					}
 				}
 
-				if (bNukes) {
+				if (bNukes && !isPlayer) {
 					for (int i = 4; i < 2047; ++i) {
 						__int64 target = static_cast<__int64>(g_entity) + (0x4F8 * i);
 						spoof_call(spoof_t, G_Damage, target, inflictor, attacker, a4, a5, (int)9999999, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
@@ -485,11 +621,11 @@ namespace hooks {
 				if (bDamageMultiplier && !isPlayer) {
 					return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, newDamage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
 				}
+							
+			}
 
-				if (bGodMode) {
-					return 0;
-				}
-			
+			if (bGodMode && isPlayer) {
+				return 0;
 			}
 
 			return spoof_call(spoof_t, G_Damage, targ, inflictor, attacker, a4, a5, damage, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17);
@@ -533,7 +669,7 @@ namespace hooks {
 
 				strncpy((char*)metaDataSize + 0x242, titleBuf.c_str(), 32);
 				*(bool*)(metaDataSize + 0x286) = true;
-				strncpy((char*)((ProcessBase + 0x197EBA00) + 0x6706EA), titleBuf.c_str(), 32);
+				strncpy((char*)((ProcessBase + 0x1976CA80) + 0x6706EA), titleBuf.c_str(), 32);
 
 			}
 
@@ -545,7 +681,7 @@ namespace hooks {
 
 				strncpy((char*)metaDataSize + 0x287, descBuf.c_str(), 32);
 				*(bool*)(metaDataSize + 0x307) = true;
-				strncpy((char*)((ProcessBase + 0x197EBA00) + 0x67072F), descBuf.c_str(), 32);
+				strncpy((char*)((ProcessBase + 0x1976CA80) + 0x67072F), descBuf.c_str(), 32);
 
 			}
 
@@ -554,7 +690,7 @@ namespace hooks {
 
 		bool hkFileshare_CreateMetaData(__int64 a1, FileshareMetaInfo* metaInfo, int* a3, int a4) {
 
-			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x260A141)) {
+			if ((DWORD_PTR)_ReturnAddress() == (ProcessBase + 0x2591691)) {
 
 				//DumpMemoryToFile((uintptr_t)metaInfo, 256, "metaData.bin");
 
@@ -619,22 +755,22 @@ namespace hooks {
 			if (custom_jpg_buf)
 			{
 				if (!jpg_buf_o) {
-					jpg_buf_o = *(uint64_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8490);
+					jpg_buf_o = *(uint64_t*)(*(uint64_t*)(ProcessBase + 0x1976CA80) + 0x5A8490);
 				}
 				ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Screenshot..." });
-				*(uint64_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8490) = (uint64_t)custom_jpg_buf;
-				*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A8498) = custom_jpg_buf_size;
+				*(uint64_t*)(*(uint64_t*)(ProcessBase + 0x1976CA80) + 0x5A8490) = (uint64_t)custom_jpg_buf;
+				*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x1976CA80) + 0x5A8498) = custom_jpg_buf_size;
 			}
 
 			if (custom_thumb_buf) {
 				if (custom_thumb_buf_size <= 0x88000) {
 					ImGui::InsertNotification({ ImGuiToastType::Info, 6000, "Uploading Custom Thumbnail..." });
-					DWORD oldProtect;
+					//DWORD oldProtect;
 
-					uintptr_t imageBufferAddress = (*(uint64_t*)(ProcessBase + 0x197EBA00)) + 0x5A84A0;
+					uintptr_t imageBufferAddress = (*(uint64_t*)(ProcessBase + 0x1976CA80)) + 0x5A84A0;
 					char* targetBuffer = reinterpret_cast<char*>(imageBufferAddress);
 					memcpy((LPVOID)targetBuffer, custom_thumb_buf, custom_thumb_buf_size);
-					*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x197EBA00) + 0x5A849C) = custom_thumb_buf_size;
+					*(uint32_t*)(*(uint64_t*)(ProcessBase + 0x1976CA80) + 0x5A849C) = custom_thumb_buf_size;
 
 				}
 			}
@@ -680,6 +816,10 @@ namespace hooks {
 			return oGetPersonaName(_this);
 		}
 
+		__int64 hkLivePresence_Serialize(__int64 a1, __int64 a2) {
+			return 1;
+		}
+
 		void hkUI_Interface_DrawText(unsigned int localClientNum, __int64* luiElement, float xPos, float yPos, unsigned int R, unsigned int G, unsigned int B, unsigned int A, char flags, char* text, __int64 font, float fontHeight, float wrapWidth, float alignment, char luaVM, QWORD* element) {
 			
 			std::string curText(text ? text : "");
@@ -699,6 +839,63 @@ namespace hooks {
 			return UI_Interface_DrawText(localClientNum, luiElement, xPos, yPos, R, G, B, A, flags, (char*)curText.c_str(), font, fontHeight, wrapWidth, alignment, luaVM, element);
 		}
 
+		void hkDraw2D(int a1) {
+
+			for (auto& tracer : tracers)
+			{
+				if (tracer.opacity > 0)
+				{
+					tracer.start_screen = WorldToScreen(tracer.start, 1);
+					tracer.end_screen = WorldToScreen(tracer.end, 1);
+					tracer.radius = 6;
+				}
+			}
+			spoof_call(spoof_t, CG_Draw2D, a1);
+		}
+
+		__int64 hkCG_BulletHitEvent_Internal(int localClientNum, int sourceEntityNum, int targetEntityNum, __int64 weapon, ImVec3 startPos, ImVec3 position, ImVec3 normal, ImVec3 seeThruDecalNormal, int surfType, int* _event, __int64 eventParam, __int16 a12, unsigned __int16 a13, int a14) {
+			
+			if (!bAllTracers) {
+				if (targetEntityNum > 18 || sourceEntityNum != *(DWORD*)cgArray) return spoof_call(spoof_t, CG_BulletHitEvent_Internal, localClientNum, sourceEntityNum, targetEntityNum, weapon, startPos, position, normal, seeThruDecalNormal, surfType, _event, eventParam, a12, a13, a14);
+			}
+
+			bullet_tracer tracer{};
+			uintptr_t centity_t = cg_EntitiesArray + (0x900 * sourceEntityNum);
+			uintptr_t DObj = Com_GetClientDObj(*(DWORD*)(centity_t + 0x3F8), 0);
+			if (!centity_t || !DObj || sourceEntityNum != *(DWORD*)cgArray) return spoof_call(spoof_t, CG_BulletHitEvent_Internal, localClientNum, sourceEntityNum, targetEntityNum, weapon, startPos, position, normal, seeThruDecalNormal, surfType, _event, eventParam, a12, a13, a14);
+
+			static float whatever1[255];
+
+			tracer.start = CG_DObjGetWorldTagPos(centity_t, DObj, GScr_AllocString("tag_flash"), whatever1);
+			tracer.end = position;
+			tracer.opacity = 255.0f;
+			tracer.time = std::chrono::high_resolution_clock::now();
+
+			if (bTracers)
+				tracers.push_back(tracer);
+
+			return spoof_call(spoof_t, CG_BulletHitEvent_Internal, localClientNum, sourceEntityNum, targetEntityNum, weapon, startPos, position, normal, seeThruDecalNormal, surfType, _event, eventParam, a12, a13, a14);
+
+		}
+
+	}
+
+	__int64 GetCGArray(int a1, int a2) {
+		return spoof_call(spoof_t, lergstuff, a1, a2);
+	}
+
+	void initPointers() {
+
+		cgArray = reinterpret_cast<std::uintptr_t>((__int64*)(GetCGArray(0, 1793) - 3294544));
+
+		if (cgArray > 0) {
+			cg_EntitiesArray = cgArray + 0x8AAAE0;
+			playerState = cgArray + 0x11A8B0;
+			cgsArray = cgArray + 0x684E40;
+			clientactive_t = (__int64)(cgArray + 0x15CE0B0);
+			clientinfo = (__int64)(cgArray + 0x2E7A40);
+			bPointersInitialized = true;
+		}
 	}
 
 	void initPointerSwaps() {
@@ -718,7 +915,7 @@ namespace hooks {
 
 
 		// Steam Peer to Peer
-		__int64 ptr = *(__int64*)(ProcessBase + 0x10BBCBD0);
+		__int64 ptr = *(__int64*)(ProcessBase + 0x10B3DC50);
 		__int64 vtable = *(__int64*)(ptr);
 
 		ReadP2PPacket_o = (decltype(&functions::ReadP2PPacket))((*(__int64*)(vtable + 0x10)));
@@ -734,7 +931,7 @@ namespace hooks {
 	void initialize_dispatch()
 	{
 
-		auto ptr = *(uintptr_t*)(ProcessBase + 0x9BB4878);
+		auto ptr = *(uintptr_t*)(ProcessBase + 0x9B35878);
 		auto vmt = **(uintptr_t***)(ptr + 1384);
 
 		auto vtable_buf = new uintptr_t[50];
@@ -747,7 +944,229 @@ namespace hooks {
 
 	}
 
+	inline void PA(uint8_t* address, const uint8_t* patch, size_t patchSize)
+	{
+		DWORD oldProtect;
+
+		VirtualProtect(address, patchSize, PAGE_EXECUTE_READWRITE, &oldProtect);
+
+		for (size_t i = 0; i < patchSize; i++)
+			address[i] = patch[i];
+
+		FlushInstructionCache(GetCurrentProcess(), address, patchSize);
+
+		DWORD dummy;
+		VirtualProtect(address, patchSize, oldProtect, &dummy);
+	}
+
+	template <size_t N>
+	struct OP {
+		std::array<uint8_t, N> d;
+		static constexpr uint8_t k = 0x69;
+
+		constexpr OP(const uint8_t(&in)[N]) : d{} {
+			for (size_t i = 0; i < N; ++i) {
+				d[i] = in[i] ^ k;
+			}
+		}
+		void A(uint8_t* a, void (*p)(uint8_t*, const uint8_t*, size_t)) const {
+			uint8_t dc[N];
+			for (size_t i = 0; i < N; ++i) {
+				dc[i] = d[i] ^ k;
+			}
+			p(a, dc, N);
+
+			memset(dc, 0, N);
+		}
+	};
+
+	static constexpr OP pc1({ 0x48, 0x31, 0xC9, 0x90, 0x90, 0x90 });
+	static constexpr OP pc2({ 0x48, 0x31, 0xC9, 0x90, 0x90, 0x90, 0x90, 0x90 });
+	static constexpr OP pc3({ 0x48, 0x31, 0xC0, 0x48, 0x31, 0xD2 });
+
+
+	void PatchPrecomputed()
+	{
+
+		for (auto rva : crc1)
+			pc1.A((uint8_t*)(ProcessBase + rva), PA);
+
+		for (auto rva : crc2)
+			pc2.A((uint8_t*)(ProcessBase + rva), PA);
+
+		for (auto rva : crc3)
+			pc3.A((uint8_t*)(ProcessBase + rva), PA);
+	}
+
+
+	void applyPatches() {
+
+		// In Game:
+		MH_CreateHook((LPVOID)(ProcessBase + 0x22C9650), functions::hkflsomeWeirdCharacterIndex, (LPVOID*)&flsomeWeirdCharacterIndex);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x22C9650));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1EAAD60), functions::hkUserHasLicenseForApp, (LPVOID*)&UserHasLicenseForApp);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1EAAD60));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1321130), functions::hkCL_GetConfigString, (LPVOID*)&CL_GetConfigString);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1321130));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1980980), functions::hkG_Damage, (LPVOID*)&G_Damage); // 40 55 41 55 48 8D 6C 24 ? 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ?
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1980980));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x60F920), functions::hkDraw2D, (LPVOID*)&CG_Draw2D);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x60F920));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1189E10), functions::hkCG_BulletHitEvent_Internal, (LPVOID*)&CG_BulletHitEvent_Internal);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1189E10));
+
+
+		// For fun 
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1D10840), functions::hkR_ConvertColorToBytes, (LPVOID*)&R_ConvertColorToBytes);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1D10840));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x268CC60), functions::hkUI_IsRenderingImmediately, (LPVOID*)&UI_IsRenderingImmediately);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x268CC60));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1DFCC60), functions::hkLiveInventory_GetItemQuantity, (LPVOID*)&LiveInventory_GetItemQuantity);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1DFCC60));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1E06110), functions::hkLiveEntitlements_IsEntitlementActiveForController, (LPVOID*)&LiveEntitlements_IsEntitlementActiveForController);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1E06110));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1DFC580), functions::hkLiveInventory_AreExtraSlotsPurchased, (LPVOID*)&LiveInventory_AreExtraSlotsPurchased);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1DFC580));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1EBB200), functions::hkLive_UserGetName, (LPVOID*)&Live_UserGetName);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1EBB200));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x2591590), functions::hkDemo_SetMetaData, (LPVOID*)&Demo_SetMetaData);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x2591590));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x2591050), functions::hkDemo_SaveScreenshotToContentServer, (LPVOID*)&Demo_SaveScreenshotToContentServer);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x2591050));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1DE9E10), functions::hkFileshare_GetSummaryFileAuthorXUID, (LPVOID*)&Fileshare_GetSummaryFileAuthorXUID);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1DE9E10));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1E7B060), functions::hkFileshare_CanDownloadFile, (LPVOID*)&Fileshare_CanDownloadFile);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1E7B060));
+
+		// Patches
+		MH_CreateHook((LPVOID)(ProcessBase + 0x134CD70), functions::hkCL_ConnectionlessCMD, (LPVOID*)&CL_ConnectionlessCMD);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x134CD70));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1F28860), functions::hkUI_Interface_DrawText, (LPVOID*)&UI_Interface_DrawText);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1F28860));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1E85450), functions::hkLivePresence_Serialize, (LPVOID*)&LivePresence_Serialize);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1E85450));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1EEA320), functions::hkLobbyMsgRW_PackageElement, (LPVOID*)&LobbyMsgRW_PackageElement);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1EEA320));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x143A620), functions::hkdwInstantDispatchMessage, (LPVOID*)&dwInstantDispatchMessage);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x143A620));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1DFDFE0), functions::hkLiveInventory_IsValid, (LPVOID*)&LiveInventory_IsValid);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x1DFDFE0));
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x20EC0B0), functions::hkCom_Error, (LPVOID*)&Com_Error);
+		MH_EnableHook((LPVOID)(ProcessBase + 0x20EC0B0));
+
+	}
+
+
+
+	void restorePatches() {
+
+		// Patches
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1321130));		//hkCL_GetConfigString
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1321130));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x134CD70));		//hkCL_ConnectionlessCMD
+		MH_DisableHook((LPVOID)(ProcessBase + 0x134CD70));
+
+		//MH_RemoveHook((LPVOID)(ProcessBase + 0x1EEA320));		//hkLobbyMsgRW_PackageElement
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980980));		//G_Damage
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1980980));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1D10840));		//hkR_ConvertColorToBytes
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1D10840));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x268CC60));		//hkUI_IsRenderingImmediately
+		MH_DisableHook((LPVOID)(ProcessBase + 0x268CC60));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DE9E10));		//hkFileshare_GetSummaryFileAuthorXUID
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1DE9E10));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E7B060));		//hkFileshare_CanDownloadFile
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1E7B060));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EAAD60));		//hkUserHasLicenseForApp
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1EAAD60));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E06110));		//hkLiveEntitlements_IsEntitlementActiveForController
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1E06110));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFC580));		//hkLiveInventory_AreExtraSlotsPurchased
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1DFC580));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFCC60));		//hkLiveInventory_GetItemQuantity
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1DFCC60));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EBB200));		//hkLive_UserGetName
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1EBB200));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x22C9650));		//flsomeWeirdCharacterIndex
+		MH_DisableHook((LPVOID)(ProcessBase + 0x22C9650));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591050));		//Demo_SaveScreenshotToContentServer
+		MH_DisableHook((LPVOID)(ProcessBase + 0x2591050));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591590));		//Demo_SetMetaData
+		MH_DisableHook((LPVOID)(ProcessBase + 0x2591590));
+
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1F28860));		//UI_Interface_DrawText
+		MH_DisableHook((LPVOID)(ProcessBase + 0x1F28860));
+
+
+		//MH_DisableHook(MH_ALL_HOOKS);
+	}
+
+
 	void onFrame() {
+
+		static bool inGameBoolean = false; // Tracks whether hooks are currently enabled
+		static bool dispatch_enabled = false;
+		static bool crc_enabled = false;
+
+		if (!crc_enabled && *(__int64*)(ProcessBase + 0x1686E948)) {
+			PatchPrecomputed();
+			crc_enabled = true;
+			ImGui::InsertNotification({ ImGuiToastType::Success, 3000, "CRC Disabled" });
+		}
+
+		if (is_match_loaded()) {
+			if (!inGameBoolean) {
+				// Enable hooks
+				//tracers.clear();
+				inGameBoolean = true;
+			}
+		}
+		else {
+			if (inGameBoolean) {
+				// Disable hooks
+				tracers.clear();
+				inGameBoolean = false;
+			}
+		}
+
+		if (!bPointersInitialized) {
+			initPointers();
+		}
 
 		if (!Live_IsUserInGame(0) && Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0)) {
 
@@ -764,109 +1183,68 @@ namespace hooks {
 			Dvar_SetFromString("groupUploadInterval", "1", true);
 
 
-		}		
+		}
 
-		static bool dispatch_enabled = false;
 
 		if (!dispatch_enabled && Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0))
 		{
 			initialize_dispatch();
+			
+			applyPatches();
 			dispatch_enabled = true;
 			ImGui::InsertNotification({ ImGuiToastType::Success, 3000, "Patches Enabled" });
 		}
 	}
 
-	void applyPatches() {
-
-		 //Patches 
-
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1321110), functions::hkCL_GetConfigString, (LPVOID*)&CL_GetConfigString);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x134CD50), functions::hkCL_ConnectionlessCMD, (LPVOID*)&CL_ConnectionlessCMD);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1321110), functions::hkLobbyMsgRW_PackageElement, (LPVOID*)&LobbyMsgRW_PackageElement);
-		//MH_CreateHook((LPVOID)(ProcessBase + 0x143A600), functions::hkdwInstantDispatchMessage, (LPVOID*)&dwInstantDispatchMessage);
-
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1980960), functions::hkG_Damage, (LPVOID*)&G_Damage);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1D1CC10), functions::hkR_ConvertColorToBytes, (LPVOID*)&R_ConvertColorToBytes);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x2705710), functions::hkUI_IsRenderingImmediately, (LPVOID*)&UI_IsRenderingImmediately);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1DF61E0), functions::hkFileshare_GetSummaryFileAuthorXUID, (LPVOID*)&Fileshare_GetSummaryFileAuthorXUID);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1E87430), functions::hkFileshare_CanDownloadFile, (LPVOID*)&Fileshare_CanDownloadFile);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1EB7130), functions::hkUserHasLicenseForApp, (LPVOID*)&UserHasLicenseForApp);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1E124E0), functions::hkLiveEntitlements_IsEntitlementActiveForController, (LPVOID*)&LiveEntitlements_IsEntitlementActiveForController);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1E08950), functions::hkLiveInventory_AreExtraSlotsPurchased, (LPVOID*)&LiveInventory_AreExtraSlotsPurchased);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1E09030), functions::hkLiveInventory_GetItemQuantity, (LPVOID*)&LiveInventory_GetItemQuantity);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1EC75D0), functions::hkLive_UserGetName, (LPVOID*)&Live_UserGetName);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x2342100), functions::hkflsomeWeirdCharacterIndex, (LPVOID*)&flsomeWeirdCharacterIndex);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x2609B00), functions::hkDemo_SaveScreenshotToContentServer, (LPVOID*)&Demo_SaveScreenshotToContentServer);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x260A040), functions::hkDemo_SetMetaData, (LPVOID*)&Demo_SetMetaData);
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1F34920), functions::hkUI_Interface_DrawText, (LPVOID*)&UI_Interface_DrawText);
-		MH_EnableHook(MH_ALL_HOOKS);
-	}
-
-	void restorePatches() {
-
-		// Patches
-
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1321110));		//hkCL_GetConfigString
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x134CD50));		//hkCL_ConnectionlessCMD
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EF65C0));		//hkLobbyMsgRW_PackageElement
-
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980960));		//G_Damage
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1D1CC10));		//hkR_ConvertColorToBytes
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x2705710));		//hkUI_IsRenderingImmediately
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DF61E0));		//hkFileshare_GetSummaryFileAuthorXUID
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E87430));		//hkFileshare_CanDownloadFile
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EB7130));		//hkUserHasLicenseForApp
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E124E0));		//hkLiveEntitlements_IsEntitlementActiveForController
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E08950));		//hkLiveInventory_AreExtraSlotsPurchased
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E09030));		//hkLiveInventory_GetItemQuantity
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EC75D0));		//hkLive_UserGetName
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x2342100));		//flsomeWeirdCharacterIndex
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x2609B00));		//Demo_SaveScreenshotToContentServer
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x260A040));		//Demo_SetMetaData
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1F34920));		//UI_Interface_DrawText
-		MH_DisableHook(MH_ALL_HOOKS);
-	}
-
 	void catch_exception(LPEXCEPTION_RECORD ExceptionRecord, LPCONTEXT ContextRecord)
 	{
-		MEMORY_BASIC_INFORMATION mbi;
-		VirtualQuery(ExceptionRecord->ExceptionAddress, &mbi, sizeof(MEMORY_BASIC_INFORMATION));
-
-		char modulename[MAX_PATH];
+		MEMORY_BASIC_INFORMATION mbi{};
+		char modulename[MAX_PATH]{};
+		char file_name[MAX_PATH]{};
 		bool module_is_filled = false;
-		char file_name[260];
-		DWORD module_name = 0;
-		if (RtlPcToFileHeader(ExceptionRecord->ExceptionAddress, &mbi.AllocationBase)) {
-			module_name = GetModuleFileName((HMODULE)reinterpret_cast<std::uintptr_t>(mbi.AllocationBase), modulename, sizeof(modulename));
-			char* last_slash = strrchr(modulename, '\\');
-			strcpy_s(file_name, last_slash + 1);
-			module_is_filled = true;
+
+		// Query memory information for the exception address
+		if (VirtualQuery(ExceptionRecord->ExceptionAddress, &mbi, sizeof(mbi)) == 0) {
+			utils::write_log("VirtualQuery failed for address: 0x%llX", reinterpret_cast<std::uintptr_t>(ExceptionRecord->ExceptionAddress));
+		} else {
+			// Try to get the module base and name
+			if (RtlPcToFileHeader(ExceptionRecord->ExceptionAddress, &mbi.AllocationBase)) {
+				if (GetModuleFileNameA(reinterpret_cast<HMODULE>(mbi.AllocationBase), modulename, sizeof(modulename))) {
+					if (const char* last_slash = strrchr(modulename, '\\')) {
+						strncpy_s(file_name, last_slash + 1, _TRUNCATE);
+					} else {
+						strncpy_s(file_name, modulename, _TRUNCATE);
+					}
+					module_is_filled = true;
+				}
+			}
 		}
 
-		auto module_offset = reinterpret_cast<std::uintptr_t>(ExceptionRecord->ExceptionAddress) - reinterpret_cast<std::uintptr_t>(mbi.AllocationBase);
+		// Calculate offsets
+		auto exception_addr = reinterpret_cast<std::uintptr_t>(ExceptionRecord->ExceptionAddress);
+		auto process_offset = exception_addr - ProcessBase;
+		auto module_offset = mbi.AllocationBase ? (exception_addr - reinterpret_cast<std::uintptr_t>(mbi.AllocationBase)) : 0;
 
 		utils::begin_exception();
 		utils::write_log("Image base: 0x%llX", ProcessBase);
 		utils::write_log("Cheat base: 0x%llX", dllbase);
 
-		utils::write_log("Exception at: [ 0x%llX ] ", ContextRecord->Rip);
-		utils::write_log("Exception address: 0x%llX (0x%llX)", ExceptionRecord->ExceptionAddress, module_offset);
+		utils::write_log("Exception at: [0x%llX]", ContextRecord->Rip);
+		utils::write_log("Exception address: 0x%llX (process offset: 0x%llX, module offset: 0x%llX)", exception_addr, process_offset, module_offset);
 		if (module_is_filled) {
-			utils::write_log("Module: %s ", file_name);
+			utils::write_log("Module: %s", file_name);
 		}
 		utils::write_log("Exception code: 0x%llX", ExceptionRecord->ExceptionCode);
 
+		// Dump registers
 		utils::write_log("Rax: 0x%llX", ContextRecord->Rax);
 		utils::write_log("Rcx: 0x%llX", ContextRecord->Rcx);
 		utils::write_log("Rdx: 0x%llX", ContextRecord->Rdx);
 		utils::write_log("Rbx: 0x%llX", ContextRecord->Rbx);
-
 		utils::write_log("Rsp: 0x%llX", ContextRecord->Rsp);
 		utils::write_log("Rbp: 0x%llX", ContextRecord->Rbp);
-
 		utils::write_log("Rsi: 0x%llX", ContextRecord->Rsi);
 		utils::write_log("Rdi: 0x%llX", ContextRecord->Rdi);
-
 		utils::write_log("R8: 0x%llX", ContextRecord->R8);
 		utils::write_log("R9: 0x%llX", ContextRecord->R9);
 		utils::write_log("R10: 0x%llX", ContextRecord->R10);
@@ -876,78 +1254,56 @@ namespace hooks {
 		utils::write_log("R14: 0x%llX", ContextRecord->R14);
 		utils::write_log("R15: 0x%llX", ContextRecord->R15);
 
-		for (auto i{ 0 }; i < 50; i++)
-		{
+		// Dump stack
+		for (int i = 0; i < 50; ++i) {
 			utils::write_log("Rsp+%i: 0x%llX", i * sizeof(std::uintptr_t), reinterpret_cast<std::uintptr_t*>(ContextRecord->Rsp)[i]);
 		}
 
 		utils::end_exception();
 
 	}
-
+	
 	LONG CALLBACK hookHandler(LPEXCEPTION_POINTERS ex)
 	{
-
 		auto record = ex->ExceptionRecord;
 		auto ctx = ex->ContextRecord;
 
-		if (ex->ExceptionRecord->ExceptionCode == EXCEPTION_SINGLE_STEP)
-		{
-
-			if (ctx->Dr1 == OFFSET(0x1F9CCE26))
-			{
-				applyPatches();
-				ctx->Dr1 = OFFSET(0x3000);
-
-				return EXCEPTION_CONTINUE_EXECUTION;
-			}
-			else if (ctx->Dr1 == OFFSET(0x3000))
-			{
-				restorePatches();
-				ctx->Dr1 = OFFSET(0x1F9CCE26);
-
-				return EXCEPTION_CONTINUE_EXECUTION;
-			}
-			return EXCEPTION_CONTINUE_EXECUTION;
-		}
-
 		if (ex->ExceptionRecord->ExceptionCode == 0xC0000005) {
 
-			if (ctx->Rip == OFFSET(0x11D256B))
+			if (ctx->Rip == OFFSET(0x11D2580)) // 0x11D2580 66 83 BE ? ? ? ? ? 0F 95 C0 8B 84 81 ? ? ? ?
 			{
 				ctx->Rax = FALSE;
-				ctx->Rip = OFFSET(0x11D2572);
+				ctx->Rip = OFFSET(0x11D2592);
 				ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "CG_GetEntityImpactType crash prevented" });
 
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
-			else if (ctx->Rip == OFFSET(0x233D3E5))
+			else if (ctx->Rip == OFFSET(0x22C4935)) // 0x22C4935 44 0F B6 B1 ?? ?? ?? ?? 33 FF 4C 89 7C 24 ?? 4C 8B 79 18
 			{
 				ctx->Rax = FALSE;
-				ctx->Rip = OFFSET(0x233D4AE);
+				ctx->Rip = OFFSET(0x22C49FE);
 				ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "DObjGetBoneIndex crash prevented" });
 
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
 
-			else if (utils::is_address_within_range(ctx->Rip, OFFSET(0x1E7E870), OFFSET(0x1E7EB0F)))
-			{
-				ctx->Rip = OFFSET(0x1E7EAF6);
-				ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "LiveInvites_SendJoinInfo prevented" });
+			//else if (utils::is_address_within_range(ctx->Rip, OFFSET(0x1E724A0), OFFSET(0x1E7273F))) // 0x1E724A0 - 0x1E7273F 8B 43 04 89 44 24 74 C7 44 24 ?? ?? ?? ?? ?? C6 44 24 ?? ?? B3 01
+			//{
+			//	ctx->Rip = OFFSET(0x1E72726);
+			//	ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "LiveInvites_SendJoinInfo prevented" });
 
-				return EXCEPTION_CONTINUE_EXECUTION;
-			}
+			//	return EXCEPTION_CONTINUE_EXECUTION;
+			//}
 
 			else {				
 				catch_exception(ex->ExceptionRecord, ex->ContextRecord);
 				return EXCEPTION_CONTINUE_EXECUTION;
 			}
 		}
-	
-		return EXCEPTION_CONTINUE_SEARCH;
+		return EXCEPTION_CONTINUE_EXECUTION;
 	}
 
-	void initialize() {
+	void initExceptionHandler() {		
 
 		AddVectoredExceptionHandler(1, hookHandler);
 
@@ -976,12 +1332,13 @@ namespace hooks {
 
 							if (GetThreadContext(hThread, &context))
 							{
-								context.Dr0 = 0;
-								context.Dr1 = OFFSET(0x3000);
+
+								context.Dr0 = (uintptr_t)0;
+								context.Dr1 = 0; //OFFSET(0x3000);
 								context.Dr2 = 0;
 								context.Dr3 = 0;
 
-								context.Dr7 = (1 << 0) | (1 << 20) | (1 << 21) | (1 << 2) | (1 << 4) | (1 << 6);
+								context.Dr7 = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6);
 
 								SetThreadContext(hThread, &context);
 							}
@@ -995,8 +1352,10 @@ namespace hooks {
 			}
 		}
 
-		applyPatches();
-		initPointerSwaps();
+		//applyPatches();
+		
 
 	}
+
+
 }

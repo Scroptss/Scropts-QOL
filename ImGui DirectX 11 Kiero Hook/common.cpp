@@ -41,6 +41,17 @@ const char* customclass[] = {
 
 };
 
+uintptr_t cgArray = 0;
+//uintptr_t spoofAddr = 0;
+uintptr_t cg_EntitiesArray = 0;
+__int64 playerState = 0;
+__int64 clientactive_t = 0;
+__int64 clientinfo = 0;
+__int64 cgsArray = 0;
+uintptr_t centity_t = 0;
+
+
+bool bPointersInitialized;
 bool bLogE;
 bool bFriendsOnly;
 bool bUnlockDLC;
@@ -64,6 +75,8 @@ bool bInfAmmoRan;
 bool bThorns;
 bool bNukes;
 bool bDamageMultiplier;
+bool bTracers;
+bool bAllTracers;
 
 int iBlackmarketAmt = 999;
 int iBribe;
@@ -72,6 +85,7 @@ int iDamageMultiplier = 1;
 
 float flHue;
 float flSpeed = 3.0f;
+float flTracerTime = 3.5f;
 
 ImColor mainColor;
 ImColor uiColor = { 1.0f,1.0f,1.0f,1.0f };
@@ -87,37 +101,45 @@ std::uintptr_t ProcessBase = reinterpret_cast<std::uintptr_t>(GetModuleHandleA(n
 std::string nameBuffer = "";
 std::string custom_title_buf = "";
 std::string custom_desc_buf = "";
+std::string statPathBuffer = "";
 std::string custom_delete_buf = "";
-DWORD_PTR ISteamFriends = *(DWORD_PTR*)(ProcessBase + 0x10BBCBA0);
-DWORD_PTR iSteamGameServer = *(DWORD_PTR*)(ProcessBase + 0x1142E158);
-DWORD_PTR iSteamApps = *(DWORD_PTR*)(ProcessBase + 0x10BBCBC0);
-DWORD_PTR pGetPersonaNameReturn = ProcessBase + 0x1EB0DEC;
+DWORD_PTR ISteamFriends = *(DWORD_PTR*)(ProcessBase + 0x10B3DC20);
+DWORD_PTR iSteamGameServer = *(DWORD_PTR*)(ProcessBase + 0x113AF1E8);
+DWORD_PTR iSteamApps = *(DWORD_PTR*)(ProcessBase + 0x10B3DC40);
+DWORD_PTR pGetPersonaNameReturn = ProcessBase + 0x1EA4A1C;
 std::ofstream myfile;
-LiveStats_GetRootDDLStateT LiveStats_Core_GetRootDDLState = (LiveStats_GetRootDDLStateT)(ProcessBase + 0x1EA96D0);
-GetSessionStateT GetSessionState = (GetSessionStateT)(ProcessBase + 0x20F6D30);
-LiveStats_Core_GetDDLContextT LiveStats_Core_GetDDLContext = (LiveStats_Core_GetDDLContextT)(ProcessBase + 0x1EA9660);
-LiveStats_Core_GetStableDDLContextT LiveStats_Core_GetStableDDLContext = (LiveStats_Core_GetStableDDLContextT)(ProcessBase + 0x1EA9730);
-DDL_MoveToNameT DDL_MoveToName = (DDL_MoveToNameT)(ProcessBase + 0x2522460);
-DDL_MoveToPathT DDL_MoveToPath = (DDL_MoveToPathT)(ProcessBase + 0x2522470);
-DDL_Lookup_MoveToNameT DDL_Lookup_MoveToName = (DDL_Lookup_MoveToNameT)(ProcessBase + 0x1427A00);
-DDL_SetUIntT DDL_SetUInt = (DDL_SetUIntT)(ProcessBase + 0x2522970);
-DDL_GetUIntT DDL_GetUInt = (DDL_GetUIntT)(ProcessBase + 0x2521F30);
-DDL_SetIntT DDL_SetInt = (DDL_SetUIntT)(ProcessBase + 0x2522770);
-DDL_SetStringT DDL_SetString = (DDL_SetStringT)(ProcessBase + 0x25227F0);
-LiveStorage_UploadStatsForControllerT LiveStorage_UploadStatsForController = (LiveStorage_UploadStatsForControllerT)(ProcessBase + 0x1EC0D30);
-LiveStats_SetShowcaseWeaponT LiveStats_SetShowcaseWeapon = (LiveStats_SetShowcaseWeaponT)(ProcessBase + 0x1EAD1A0);
-LiveStats_SetCharacterHeadIndexT LiveStats_SetCharacterHeadIndex = (LiveStats_SetCharacterHeadIndexT)(ProcessBase + 0x1EACD70);
+LiveStats_GetRootDDLStateT LiveStats_Core_GetRootDDLState = (LiveStats_GetRootDDLStateT)(ProcessBase + 0x1E9D300);
+GetSessionStateT GetSessionState = (GetSessionStateT)(ProcessBase + 0x20EAC70);
+LiveStats_Core_GetDDLContextT LiveStats_Core_GetDDLContext = (LiveStats_Core_GetDDLContextT)(ProcessBase + 0x1E9D290);
+LiveStats_Core_GetStableDDLContextT LiveStats_Core_GetStableDDLContext = (LiveStats_Core_GetStableDDLContextT)(ProcessBase + 0x1E9D360);
+DDL_MoveToNameT DDL_MoveToName = (DDL_MoveToNameT)(ProcessBase + 0x24A99B0);
+DDL_MoveToPathT DDL_MoveToPath = (DDL_MoveToPathT)(ProcessBase + 0x24A99C0);
+DDL_Lookup_MoveToNameT DDL_Lookup_MoveToName = (DDL_Lookup_MoveToNameT)(ProcessBase + 0x1427A20);
+DDL_SetUIntT DDL_SetUInt = (DDL_SetUIntT)(ProcessBase + 0x24A9EC0);
+DDL_GetUIntT DDL_GetUInt = (DDL_GetUIntT)(ProcessBase + 0x24A9480);
+DDL_SetIntT DDL_SetInt = (DDL_SetUIntT)(ProcessBase + 0x24A9CC0);
+DDL_SetStringT DDL_SetString = (DDL_SetStringT)(ProcessBase + 0x24A9D40);
+LiveStorage_UploadStatsForControllerT LiveStorage_UploadStatsForController = (LiveStorage_UploadStatsForControllerT)(ProcessBase + 0x1EB4960);
+LiveStats_SetShowcaseWeaponT LiveStats_SetShowcaseWeapon = (LiveStats_SetShowcaseWeaponT)(ProcessBase + 0x1EA0DD0);
+LiveStats_SetCharacterHeadIndexT LiveStats_SetCharacterHeadIndex = (LiveStats_SetCharacterHeadIndexT)(ProcessBase + 0x1EA09A0);
 lergstuffT lergstuff = (lergstuffT)(ProcessBase + 0x1C4D70);
-send_p2p_packet_t send_p2p_packet = reinterpret_cast<send_p2p_packet_t>(OFFSET(0x1EB01C0));
-LootT GiveLootToSelf = (LootT)(ProcessBase + 0x1E82C50);
-GameSendServerCommandT SV_GameSendServerCommand = (GameSendServerCommandT)(ProcessBase + 0x224F580);
-live_presence_pack_t live_presence_pack = (live_presence_pack_t)(ProcessBase + 0x1E93CE0);
+send_p2p_packet_t send_p2p_packet = reinterpret_cast<send_p2p_packet_t>(OFFSET(0x1EA3DF0));
+LootT GiveLootToSelf = (LootT)(ProcessBase + 0x1E76880);
+GameSendServerCommandT SV_GameSendServerCommand = (GameSendServerCommandT)(ProcessBase + 0x21F3110);
+live_presence_pack_t live_presence_pack = (live_presence_pack_t)(ProcessBase + 0x1E87910);
+
+WorldPosToScreenPosT WorldPosToScreenPos = (WorldPosToScreenPosT)(ProcessBase + 0x574140); // 
+Com_GetClientDObjT Com_GetClientDObj = (Com_GetClientDObjT)(ProcessBase + 0x20F5D40);
+GScr_AllocStringT GScr_AllocString = (GScr_AllocStringT)(ProcessBase + 0x1A77150);
+CG_DObjGetWorldTagPosInternalT CG_DObjGetWorldTagPosInternal = (CG_DObjGetWorldTagPosInternalT)(ProcessBase + 0x1ABCF0);
 
 
 
 uint64_t PlayerXUID;
 tGetPersonaName oGetPersonaName;
-tLiveSteam_FilterPersonaName oLiveSteam_FilterPersonaName = (tLiveSteam_FilterPersonaName)(ProcessBase + 0x1EB02C0);
+tLiveSteam_FilterPersonaName oLiveSteam_FilterPersonaName = (tLiveSteam_FilterPersonaName)(ProcessBase + 0x1EA3EF0);
+
+std::vector<bullet_tracer> tracers;
 
 std::string primaryPreviews[10];
 std::string secondaryPreviews[10];
@@ -342,8 +364,7 @@ const char* slots[] = {
     "killStreak4"
 };
 
-std::vector<std::string> legit_packets = { 
-"loadingnewmap",
+std::vector<std::string> legit_packets = {
 "connectResponse",
 "statresponse",
 "LM",
@@ -399,4 +420,5 @@ int Keybinds[17] = {
     VK_DELETE,
     VK_OEM_PLUS
 };
+
 

@@ -22,6 +22,21 @@ namespace utils {
 		return szBuffer;
 	}
 
+	template<typename... Parameters>
+	FORCEINLINE std::string write_Debug(std::string format, Parameters... params)
+	{
+		char szBuffer[4096] = { NULL };
+		sprintf_s(szBuffer, format.c_str(), params...);
+
+		std::ofstream myfile;
+		myfile.open(".\\QOL\\frogs.txt""", std::ios_base::app);
+		//myfile << "Exception: " << "\n";
+		myfile << szBuffer << "\n";
+		//myfile << "\n";
+		myfile.close();
+		return szBuffer;
+	}
+
 	FORCEINLINE std::string begin_exception() {
 		std::chrono::system_clock::time_point p = std::chrono::system_clock::now();
 		time_t t = std::chrono::system_clock::to_time_t(p);

@@ -7,8 +7,15 @@ namespace hooks {
     extern DWORD_PTR pNameBuffer;
 
     void applyPatches();
-	void initialize();
+	void initExceptionHandler();
     void onFrame();
+    void initPointerSwaps();
+
+    bool is_user_in_game();
+    bool is_user_in_lobby();
+    bool AreWeInGameAndHosting();
+    bool is_in_game();
+    bool local_client_is_in_game();
 
     inline void renamePlayer(std::string name)
     {

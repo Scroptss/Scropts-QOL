@@ -1,15 +1,18 @@
 #pragma once
 #include <Windows.h>
+#include <winternl.h>
 #include <cstdint>
 #include <cstddef>
 #include <wtypes.h>
 #include <Psapi.h>
 #include <TlHelp32.h>
 #include <d3d11.h>
+#include <stdio.h>
 #include <dxgi.h>
 #include "detours/detours.h"
 #include <intrin.h>
 #include <fstream>
+#include <array>
 #include <unordered_map>
 #include "minhook/include/MinHook.h"
 #include "imgui/imgui.h"
@@ -25,9 +28,12 @@
 #include "FontAwesome/IconsFontAwesome6.h"
 #include "common.h"
 #include "Utils.hpp"
+
 #include "hooks.h"
 
 
 typedef HRESULT(__stdcall* Present) (IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags);
 typedef LRESULT(CALLBACK* WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 typedef uintptr_t PTR;
+
+#define SCROPTS_VERSION std::string("3.0.2")
