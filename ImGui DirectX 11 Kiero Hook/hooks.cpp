@@ -159,6 +159,25 @@ namespace hooks {
 			va_list args;
 			va_start(args, fmt);
 
+			static char buffer[1024]{};
+
+			if (ret == (void*)OFFSET(0x134CAE7)) // Server Disconnected, player has been kicked 
+			{
+
+				vsnprintf(buffer, sizeof(buffer), fmt, args);
+				va_end(args);
+
+				if (strstr(buffer, "PLATFORM_STEAM_AUTH_DENIED_NO_LICENSE_FOR_CONTENT"))
+				{
+					snprintf(buffer, sizeof(buffer),
+						"^1DLC SPOOF ERROR: ^7%s\n\n^7You were removed from the match for not owning the content\n\n^8To prevent this error, have the ^2HOST ^8use Scropts QOL", "PLATFORM_STEAM_AUTH_DENIED_NO_LICENSE_FOR_CONTENT");
+					return Com_Error(a1, a2, a3, "%s", buffer);
+				}
+
+				return Com_Error(a1, a2, a3, "%s", buffer);
+
+			}
+
 			if (ret == (void*)OFFSET(0x20F0227))
 			{
 
@@ -167,7 +186,6 @@ namespace hooks {
 
 				va_end(args);
 
-				static char buffer[1024];
 				snprintf(buffer, sizeof(buffer),
 					"^1DLC SPOOF ERROR: ^7%s\n\n^7Cannot load DLC files, Have you downloaded ^2%s's ^7files and placed them in your Zone Folder?\n\n ^8C:\\Program Files (x86)\\Steam\\steamapps\\common\\Call of Duty Black Ops III\\zone",
 					error ? error : "null",				
@@ -182,8 +200,7 @@ namespace hooks {
 				const char* error = va_arg(args, const char*);
 				int errorCode = va_arg(args, int);
 				va_end(args);
-
-				static char buffer[1024];
+				
 				snprintf(buffer, sizeof(buffer),
 					"^1MULTIPLAYER STAT PROTECTION:^7 [%d]\n\n^7To go backwards in rank, do a ^2Fresh Restart\n\n^8Menu -> Barracks -> Multiplayer -> Prestige Options -> Fresh Restart\n\n^7Stuck on a bugged rank? You can ^2Freeze ^7your stats, set Prestige 1,\ngo to Fresh Restart, ^1Unfreeze^7 stats, then Fresh Restart!", errorCode);				
 
@@ -191,12 +208,11 @@ namespace hooks {
 
 			}
 
-			char fallbackBuffer[2048];
-			vsnprintf(fallbackBuffer, sizeof(fallbackBuffer), fmt, args);
-			utils::write_log("[Com_Error] Relative Return Address: 0x%llX\nError Message: %s", relativeAddr, fallbackBuffer);
+			vsnprintf(buffer, sizeof(buffer), fmt, args);
+			utils::write_log("[Com_Error] Relative Return Address: 0x%llX\nError Message: %s", relativeAddr, buffer);
 			va_end(args);
 
-			return Com_Error(a1, a2, a3, "%s", fallbackBuffer);
+			return Com_Error(a1, a2, a3, "%s", buffer);
 			
 		}
 					
@@ -816,8 +832,40 @@ namespace hooks {
 			return oGetPersonaName(_this);
 		}
 
-		__int64 hkLivePresence_Serialize(__int64 a1, __int64 a2) {
-			return 1;
+		__int64 hkLivePresence_Serialize(__int64 a1, __int64 a2)
+		{
+			if (!a1 || !a2)
+				return 0;
+
+			int* packedPtr = *reinterpret_cast<int**>(a1 + 16);
+
+			if (!packedPtr)
+				return 0;
+
+			int packed = *packedPtr;
+			int count = (packed >> 2) & 0x1F;
+
+			constexpr int maxPlayers = 18;
+
+			if (count > maxPlayers)
+			{
+				int sanitized = packed;
+
+				sanitized &= ~(0x1F << 2);
+				sanitized |= (maxPlayers & 0x1F) << 2;
+
+				*packedPtr = sanitized;
+
+				ImGui::InsertNotification({
+					ImGuiToastType::Warning,
+					3000,
+					"Crash Attempt: Presence player count clamped: %d -> %d",
+					count,
+					maxPlayers
+					});
+			}
+
+			return LivePresence_Serialize(a1, a2);
 		}
 
 		void hkUI_Interface_DrawText(unsigned int localClientNum, __int64* luiElement, float xPos, float yPos, unsigned int R, unsigned int G, unsigned int B, unsigned int A, char flags, char* text, __int64 font, float fontHeight, float wrapWidth, float alignment, char luaVM, QWORD* element) {
@@ -1001,78 +1049,31 @@ namespace hooks {
 
 	void applyPatches() {
 
-		// In Game:
 		MH_CreateHook((LPVOID)(ProcessBase + 0x22C9650), functions::hkflsomeWeirdCharacterIndex, (LPVOID*)&flsomeWeirdCharacterIndex);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x22C9650));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1EAAD60), functions::hkUserHasLicenseForApp, (LPVOID*)&UserHasLicenseForApp);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1EAAD60));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1321130), functions::hkCL_GetConfigString, (LPVOID*)&CL_GetConfigString);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1321130));
-
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1980980), functions::hkG_Damage, (LPVOID*)&G_Damage); // 40 55 41 55 48 8D 6C 24 ? 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ?
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1980980));
-
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1980980), functions::hkG_Damage, (LPVOID*)&G_Damage);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x60F920), functions::hkDraw2D, (LPVOID*)&CG_Draw2D);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x60F920));
-
-		MH_CreateHook((LPVOID)(ProcessBase + 0x1189E10), functions::hkCG_BulletHitEvent_Internal, (LPVOID*)&CG_BulletHitEvent_Internal);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1189E10));
-
-
-		// For fun 
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1189E10), functions::hkCG_BulletHitEvent_Internal, (LPVOID*)&CG_BulletHitEvent_Internal); 
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1D10840), functions::hkR_ConvertColorToBytes, (LPVOID*)&R_ConvertColorToBytes);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1D10840));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x268CC60), functions::hkUI_IsRenderingImmediately, (LPVOID*)&UI_IsRenderingImmediately);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x268CC60));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1DFCC60), functions::hkLiveInventory_GetItemQuantity, (LPVOID*)&LiveInventory_GetItemQuantity);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1DFCC60));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1E06110), functions::hkLiveEntitlements_IsEntitlementActiveForController, (LPVOID*)&LiveEntitlements_IsEntitlementActiveForController);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1E06110));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1DFC580), functions::hkLiveInventory_AreExtraSlotsPurchased, (LPVOID*)&LiveInventory_AreExtraSlotsPurchased);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1DFC580));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1EBB200), functions::hkLive_UserGetName, (LPVOID*)&Live_UserGetName);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1EBB200));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x2591590), functions::hkDemo_SetMetaData, (LPVOID*)&Demo_SetMetaData);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x2591590));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x2591050), functions::hkDemo_SaveScreenshotToContentServer, (LPVOID*)&Demo_SaveScreenshotToContentServer);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x2591050));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1DE9E10), functions::hkFileshare_GetSummaryFileAuthorXUID, (LPVOID*)&Fileshare_GetSummaryFileAuthorXUID);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1DE9E10));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1E7B060), functions::hkFileshare_CanDownloadFile, (LPVOID*)&Fileshare_CanDownloadFile);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1E7B060));
-
-		// Patches
 		MH_CreateHook((LPVOID)(ProcessBase + 0x134CD70), functions::hkCL_ConnectionlessCMD, (LPVOID*)&CL_ConnectionlessCMD);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x134CD70));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1F28860), functions::hkUI_Interface_DrawText, (LPVOID*)&UI_Interface_DrawText);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1F28860));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1E85450), functions::hkLivePresence_Serialize, (LPVOID*)&LivePresence_Serialize);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1E85450));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1EEA320), functions::hkLobbyMsgRW_PackageElement, (LPVOID*)&LobbyMsgRW_PackageElement);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1EEA320));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x143A620), functions::hkdwInstantDispatchMessage, (LPVOID*)&dwInstantDispatchMessage);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x143A620));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1DFDFE0), functions::hkLiveInventory_IsValid, (LPVOID*)&LiveInventory_IsValid);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x1DFDFE0));
-
 		MH_CreateHook((LPVOID)(ProcessBase + 0x20EC0B0), functions::hkCom_Error, (LPVOID*)&Com_Error);
-		MH_EnableHook((LPVOID)(ProcessBase + 0x20EC0B0));
+
+		MH_EnableHook(MH_ALL_HOOKS);
 
 	}
 
@@ -1080,60 +1081,24 @@ namespace hooks {
 
 	void restorePatches() {
 
-		// Patches
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1321130));		//hkCL_GetConfigString
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1321130));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x134CD70));		//hkCL_ConnectionlessCMD
-		MH_DisableHook((LPVOID)(ProcessBase + 0x134CD70));
-
 		//MH_RemoveHook((LPVOID)(ProcessBase + 0x1EEA320));		//hkLobbyMsgRW_PackageElement
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980980));		//G_Damage
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1980980));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1D10840));		//hkR_ConvertColorToBytes
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1D10840));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x268CC60));		//hkUI_IsRenderingImmediately
-		MH_DisableHook((LPVOID)(ProcessBase + 0x268CC60));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DE9E10));		//hkFileshare_GetSummaryFileAuthorXUID
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1DE9E10));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E7B060));		//hkFileshare_CanDownloadFile
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1E7B060));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EAAD60));		//hkUserHasLicenseForApp
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1EAAD60));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E06110));		//hkLiveEntitlements_IsEntitlementActiveForController
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1E06110));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFC580));		//hkLiveInventory_AreExtraSlotsPurchased
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1DFC580));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFCC60));		//hkLiveInventory_GetItemQuantity
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1DFCC60));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EBB200));		//hkLive_UserGetName
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1EBB200));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x22C9650));		//flsomeWeirdCharacterIndex
-		MH_DisableHook((LPVOID)(ProcessBase + 0x22C9650));
-
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591050));		//Demo_SaveScreenshotToContentServer
-		MH_DisableHook((LPVOID)(ProcessBase + 0x2591050));
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591590));		//Demo_SetMetaData	
+		MH_DisableHook(MH_ALL_HOOKS);
 
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591590));		//Demo_SetMetaData
-		MH_DisableHook((LPVOID)(ProcessBase + 0x2591590));
-
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1F28860));		//UI_Interface_DrawText
-		MH_DisableHook((LPVOID)(ProcessBase + 0x1F28860));
-
-
-		//MH_DisableHook(MH_ALL_HOOKS);
 	}
 
 
@@ -1306,54 +1271,6 @@ namespace hooks {
 	void initExceptionHandler() {		
 
 		AddVectoredExceptionHandler(1, hookHandler);
-
-		THREADENTRY32 te32;
-		HANDLE hThreadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-
-		if (hThreadSnap)
-		{
-			te32.dwSize = sizeof(THREADENTRY32);
-
-			if (!Thread32First(hThreadSnap, &te32))
-			{
-				CloseHandle(hThreadSnap);
-			}
-			else {
-				do
-				{
-					if (te32.th32OwnerProcessID == GetCurrentProcessId() && te32.th32ThreadID != GetCurrentThreadId())
-					{
-						HANDLE hThread = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT | THREAD_SUSPEND_RESUME, 0, te32.th32ThreadID);
-						if (hThread)
-						{
-							CONTEXT context;
-							context.ContextFlags = CONTEXT_DEBUG_REGISTERS;
-							SuspendThread(hThread);
-
-							if (GetThreadContext(hThread, &context))
-							{
-
-								context.Dr0 = (uintptr_t)0;
-								context.Dr1 = 0; //OFFSET(0x3000);
-								context.Dr2 = 0;
-								context.Dr3 = 0;
-
-								context.Dr7 = (1 << 0) | (1 << 2) | (1 << 4) | (1 << 6);
-
-								SetThreadContext(hThread, &context);
-							}
-
-							ResumeThread(hThread);
-							CloseHandle(hThread);
-						}
-					}
-				} while (Thread32Next(hThreadSnap, &te32));
-				CloseHandle(hThreadSnap);
-			}
-		}
-
-		//applyPatches();
-		
 
 	}
 

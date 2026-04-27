@@ -1,6 +1,8 @@
 #pragma once
 #include <Windows.h>
 #include <winternl.h>
+#include <Xinput.h>
+#pragma comment(lib, "xinput9_1_0.lib")
 #include <cstdint>
 #include <cstddef>
 #include <wtypes.h>
@@ -36,4 +38,4 @@ typedef HRESULT(__stdcall* Present) (IDXGISwapChain* pSwapChain, UINT SyncInterv
 typedef LRESULT(CALLBACK* WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 typedef uintptr_t PTR;
 
-#define SCROPTS_VERSION std::string("3.0.2")
+#define SCROPTS_VERSION std::string("3.0.4")

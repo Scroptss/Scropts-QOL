@@ -3,6 +3,7 @@
 #include <sstream>
 #include <vector>
 #include "host.h"
+
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 LPVOID oPresent;
@@ -34,8 +35,8 @@ bool bProtectStats;
 bool bProtectStatsRan;
 bool bCompleteEE;
 bool bArena;
+bool bController;
 int UnlockTMR = clock();
-std::string version = "3.0.3";
 std::string sPackName;
 
 int minRank = 0;
@@ -164,13 +165,18 @@ uintptr_t FindSpoof()
 
 const void* spoof_t = (const void*)FindSpoof();
 
-
+bool is_down;
 
 void InitImGui()
 {
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	io.ConfigFlags = ImGuiConfigFlags_NoMouseCursorChange;
+
+
+	io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+	io.BackendFlags |= ImGuiBackendFlags_HasGamepad;  
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableSetMousePos;
 	io.Fonts->AddFontFromMemoryTTF(CustomFont, 1, 16);
 	ImGui_ImplWin32_Init(window);
 	ImGui_ImplDX11_Init(pDevice, pContext);
@@ -640,109 +646,110 @@ void UnlockAllAchievements() {
 
 	// CP Achievements
 
-	Cbuf_AddText(0, "achievement CP_COMPLETE_PROLOGUE");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_NEWWORLD");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_BLACKSTATION");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_BIODOMES");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_SGEN");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_VENGEANCE");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_RAMSES");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_INFECTION");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_AQUIFER");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_LOTUS");
-	Cbuf_AddText(0, "achievement CP_HARD_COMPLETE");
-	Cbuf_AddText(0, "achievement CP_REALISTIC_COMPLETE");
-	Cbuf_AddText(0, "achievement CP_CAMPAIGN_COMPLETE");
-	Cbuf_AddText(0, "achievement CP_FIREFLIES_KILL");
-	Cbuf_AddText(0, "achievement CP_UNSTOPPABLE_KILL");
-	Cbuf_AddText(0, "achievement CP_FLYING_WASP_KILL");
-	Cbuf_AddText(0, "achievement CP_TIMED_KILL");
-	Cbuf_AddText(0, "achievement CP_ALL_COLLECTIBLES");
-	Cbuf_AddText(0, "achievement CP_DIFFERENT_GUN_KILL");
-	Cbuf_AddText(0, "achievement CP_ALL_DECORATIONS");
-	Cbuf_AddText(0, "achievement CP_ALL_WEAPON_CAMOS");
-	Cbuf_AddText(0, "achievement CP_CONTROL_QUAD");
-	Cbuf_AddText(0, "achievement CP_MISSION_COLLECTIBLES");
-	Cbuf_AddText(0, "achievement CP_DISTANCE_KILL");
-	Cbuf_AddText(0, "achievement CP_OBSTRUCTED_KILL");
-	Cbuf_AddText(0, "achievement CP_MELEE_COMBO_KILL");
-	Cbuf_AddText(0, "achievement CP_COMPLETE_WALL_RUN");
-	Cbuf_AddText(0, "achievement CP_TRAINING_GOLD");
-	Cbuf_AddText(0, "achievement CP_COMBAT_ROBOT_KILL");
-	Cbuf_AddText(0, "achievement CP_KILL_WASPS");
-	Cbuf_AddText(0, "achievement CP_CYBERCORE_UPGRADE");
-	Cbuf_AddText(0, "achievement CP_ALL_WEAPON_ATTACHMENTS");
-	Cbuf_AddText(0, "achievement CP_TIMED_STUNNED_KILL");
-	Cbuf_AddText(0, "achievement CP_UNLOCK_DOA");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_PROLOGUE");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_NEWWORLD");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_BLACKSTATION");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_BIODOMES");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_SGEN");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_VENGEANCE");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_RAMSES");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_INFECTION");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_AQUIFER");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_LOTUS");
+	LiveAchievements_GiveAchievement("CP_HARD_COMPLETE");
+	LiveAchievements_GiveAchievement("CP_REALISTIC_COMPLETE");
+	LiveAchievements_GiveAchievement("CP_CAMPAIGN_COMPLETE");
+	LiveAchievements_GiveAchievement("CP_FIREFLIES_KILL");
+	LiveAchievements_GiveAchievement("CP_UNSTOPPABLE_KILL");
+	LiveAchievements_GiveAchievement("CP_FLYING_WASP_KILL");
+	LiveAchievements_GiveAchievement("CP_TIMED_KILL");
+	LiveAchievements_GiveAchievement("CP_ALL_COLLECTIBLES");
+	LiveAchievements_GiveAchievement("CP_DIFFERENT_GUN_KILL");
+	LiveAchievements_GiveAchievement("CP_ALL_DECORATIONS");
+	LiveAchievements_GiveAchievement("CP_ALL_WEAPON_CAMOS");
+	LiveAchievements_GiveAchievement("CP_CONTROL_QUAD");
+	LiveAchievements_GiveAchievement("CP_MISSION_COLLECTIBLES");
+	LiveAchievements_GiveAchievement("CP_DISTANCE_KILL");
+	LiveAchievements_GiveAchievement("CP_OBSTRUCTED_KILL");
+	LiveAchievements_GiveAchievement("CP_MELEE_COMBO_KILL");
+	LiveAchievements_GiveAchievement("CP_COMPLETE_WALL_RUN");
+	LiveAchievements_GiveAchievement("CP_TRAINING_GOLD");
+	LiveAchievements_GiveAchievement("CP_COMBAT_ROBOT_KILL");
+	LiveAchievements_GiveAchievement("CP_KILL_WASPS");
+	LiveAchievements_GiveAchievement("CP_CYBERCORE_UPGRADE");
+	LiveAchievements_GiveAchievement("CP_ALL_WEAPON_ATTACHMENTS");
+	LiveAchievements_GiveAchievement("CP_TIMED_STUNNED_KILL");
+	LiveAchievements_GiveAchievement("CP_UNLOCK_DOA");
 
 	// MP Achievements
 
-	Cbuf_AddText(0, "achievement MP_REACH_SERGEANT");
-	Cbuf_AddText(0, "achievement MP_REACH_ARENA");
-	Cbuf_AddText(0, "achievement MP_SPECIALIST_MEDALS");
-	Cbuf_AddText(0, "achievement MP_MULTI_KILL_MEDALS");
+	LiveAchievements_GiveAchievement("MP_REACH_SERGEANT");
+	LiveAchievements_GiveAchievement("MP_REACH_ARENA");
+	LiveAchievements_GiveAchievement("MP_SPECIALIST_MEDALS");
+	LiveAchievements_GiveAchievement("MP_MULTI_KILL_MEDALS");
 
 	// ZM Achievements
 
-	Cbuf_AddText(0, "achievement ZM_COMPLETE_RITUALS");
-	Cbuf_AddText(0, "achievement ZM_SPOT_SHADOWMAN");
-	Cbuf_AddText(0, "achievement ZM_GOBBLE_GUM");
-	Cbuf_AddText(0, "achievement ZM_STORE_KILL");
-	Cbuf_AddText(0, "achievement ZM_ROCKET_SHIELD_KILL");
-	Cbuf_AddText(0, "achievement ZM_CIVIL_PROTECTOR");
-	Cbuf_AddText(0, "achievement ZM_WINE_GRENADE_KILL");
-	Cbuf_AddText(0, "achievement ZM_MARGWA_KILL");
-	Cbuf_AddText(0, "achievement ZM_PARASITE_KILL");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_EE");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_ALL_BOWS");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_MINIGUN_MURDER");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_UPGRADED_BOW");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_MECH_TRAPPER");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_SPIKE_REVIVE");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_WALL_RUNNER");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_ELECTROCUTIONER");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_WUNDER_TOURIST");
-	Cbuf_AddText(0, "achievement ZM_CASTLE_WUNDER_SNIPER");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_COMPLETE_EE");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_DRINK_WINE");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_CLONE_REVIVE");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_OBTAIN_SKULL");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_WONDER_KILL");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_STAY_UNDERWATER");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_THRASHER_RESCUE");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_ELECTRIC_SHIELD");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_DESTROY_WEBS");
-	Cbuf_AddText(0, "achievement ZM_ISLAND_EAT_FRUIT");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_NIKOLAI");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_WIELD_DRAGON");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_TWENTY_ROUNDS");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_RIDE_DRAGON");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_LOCKDOWN");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_BEAM_KILL");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_STRIKE_DRAGON");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_FAFNIR_KILL");
-	Cbuf_AddText(0, "achievement ZM_STALINGRAD_AIR_ZOMBIES");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_EE");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_SUPER_EE");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_PACKECTOMY");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_KEEPER_ASSIST");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_DEATH_RAY");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_GRAND_TOUR");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_WARDROBE_CHANGE");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_WONDERFUL");
-	Cbuf_AddText(0, "achievement ZM_GENESIS_CONTROLLED_CHAOS");
-	Cbuf_AddText(0, "achievement DLC2_ZOMBIE_ALL_TRAPS");
-	Cbuf_AddText(0, "achievement DLC2_ZOM_LUNARLANDERS");
-	Cbuf_AddText(0, "achievement DLC2_ZOM_FIREMONKEY");
-	Cbuf_AddText(0, "achievement DLC4_ZOM_TEMPLE_SIDEQUEST");
-	Cbuf_AddText(0, "achievement DLC4_ZOM_SMALL_CONSOLATION");
-	Cbuf_AddText(0, "achievement DLC5_ZOM_CRYOGENIC_PARTY");
-	Cbuf_AddText(0, "achievement DLC5_ZOM_GROUND_CONTROL");
-	Cbuf_AddText(0, "achievement ZM_DLC4_TOMB_SIDEQUEST");
-	Cbuf_AddText(0, "achievement ZM_DLC4_OVERACHIEVER");
-	Cbuf_AddText(0, "achievement ZM_PROTOTYPE_I_SAID_WERE_CLOSED");
-	Cbuf_AddText(0, "achievement ZM_ASYLUM_ACTED_ALONE");
-	Cbuf_AddText(0, "achievement ZM_THEATER_IVE_SEEN_SOME_THINGS");
+	LiveAchievements_GiveAchievement("ZM_COMPLETE_RITUALS");
+	LiveAchievements_GiveAchievement("ZM_SPOT_SHADOWMAN");
+	LiveAchievements_GiveAchievement("ZM_GOBBLE_GUM");
+	LiveAchievements_GiveAchievement("ZM_STORE_KILL");
+	LiveAchievements_GiveAchievement("ZM_ROCKET_SHIELD_KILL");
+	LiveAchievements_GiveAchievement("ZM_CIVIL_PROTECTOR");
+	LiveAchievements_GiveAchievement("ZM_WINE_GRENADE_KILL");
+	LiveAchievements_GiveAchievement("ZM_MARGWA_KILL");
+	LiveAchievements_GiveAchievement("ZM_PARASITE_KILL");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_EE");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_ALL_BOWS");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_MINIGUN_MURDER");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_UPGRADED_BOW");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_MECH_TRAPPER");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_SPIKE_REVIVE");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_WALL_RUNNER");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_ELECTROCUTIONER");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_WUNDER_TOURIST");
+	LiveAchievements_GiveAchievement("ZM_CASTLE_WUNDER_SNIPER");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_COMPLETE_EE");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_DRINK_WINE");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_CLONE_REVIVE");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_OBTAIN_SKULL");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_WONDER_KILL");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_STAY_UNDERWATER");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_THRASHER_RESCUE");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_ELECTRIC_SHIELD");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_DESTROY_WEBS");
+	LiveAchievements_GiveAchievement("ZM_ISLAND_EAT_FRUIT");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_NIKOLAI");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_WIELD_DRAGON");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_TWENTY_ROUNDS");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_RIDE_DRAGON");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_LOCKDOWN");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_BEAM_KILL");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_STRIKE_DRAGON");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_FAFNIR_KILL");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_AIR_ZOMBIES");
+	LiveAchievements_GiveAchievement("ZM_STALINGRAD_SOLO_TRIALS");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_EE");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_SUPER_EE");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_PACKECTOMY");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_KEEPER_ASSIST");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_DEATH_RAY");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_GRAND_TOUR");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_WARDROBE_CHANGE");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_WONDERFUL");
+	LiveAchievements_GiveAchievement("ZM_GENESIS_CONTROLLED_CHAOS");
+	LiveAchievements_GiveAchievement("DLC2_ZOMBIE_ALL_TRAPS");
+	LiveAchievements_GiveAchievement("DLC2_ZOM_LUNARLANDERS");
+	LiveAchievements_GiveAchievement("DLC2_ZOM_FIREMONKEY");
+	LiveAchievements_GiveAchievement("DLC4_ZOM_TEMPLE_SIDEQUEST");
+	LiveAchievements_GiveAchievement("DLC4_ZOM_SMALL_CONSOLATION");
+	LiveAchievements_GiveAchievement("DLC5_ZOM_CRYOGENIC_PARTY");
+	LiveAchievements_GiveAchievement("DLC5_ZOM_GROUND_CONTROL");
+	LiveAchievements_GiveAchievement("ZM_DLC4_TOMB_SIDEQUEST");
+	LiveAchievements_GiveAchievement("ZM_DLC4_OVERACHIEVER");
+	LiveAchievements_GiveAchievement("ZM_PROTOTYPE_I_SAID_WERE_CLOSED");
+	LiveAchievements_GiveAchievement("ZM_ASYLUM_ACTED_ALONE");
+	LiveAchievements_GiveAchievement("ZM_THEATER_IVE_SEEN_SOME_THINGS");
 }
 
 
@@ -855,18 +862,38 @@ void CompleteAllMissions() {
 
 // Arena 
 
-void setArenaPoints(int points) {
-	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
-	const char* path[8];
-	auto a1 = GetStatsBuffer(0);
-	path[0] = "arenaStats";
-	path[1] = "points";
-	char result[2000];
-	DDL_MoveToPath(tmp, result, 2, path);
-	DDL_SetUInt((__int64)result, a1, points);
-	ZeroMemory(result, sizeof(result));
-}
+void unlockArenaStats()
+{
+	auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
+	auto ctx = GetStatsBuffer(0);
 
+	char state[2000]{};
+
+	for (int i = 0; i < 2; i++)
+	{
+		const char* path[3] =
+		{
+			"arenastats",
+			intToConstCharPtr(i),
+			"points"
+		};
+
+		if (DDL_MoveToPath(root, state, 3, path))
+			DDL_SetUInt((__int64)state, ctx, 100);
+	}
+
+	for (int j = 0; j < 12; j++)
+	{
+		const char* path[2] =
+		{
+			"arenachallengeseasons",
+			intToConstCharPtr(j)
+		};
+
+		if (DDL_MoveToPath(root, state, 2, path))
+			DDL_SetUInt((__int64)state, ctx, 1);
+	}
+}
 
 // MP
 
@@ -987,6 +1014,199 @@ void GetValue(const std::vector<std::string>& path) {
 	}
 }
 
+bool SetUIntPath(__int64 root, __int64 ctx, const std::vector<const char*>& path, uint32_t value)
+{
+	char state[2000]{};
+
+	const char** pathData = const_cast<const char**>(path.data());
+
+	if (!DDL_MoveToPath(root, state, static_cast<int>(path.size()), pathData))
+		return false;
+
+	DDL_SetUInt((__int64)state, ctx, value);
+	return true;
+}
+
+int GetSpecialistIndex(const char* name)
+{
+	static const char* heroes[] =
+	{
+		"heroes_mercenary",
+		"heroes_outrider",
+		"heroes_technomancer",
+		"heroes_battery",
+		"heroes_enforcer",
+		"heroes_trapper",
+		"heroes_reaper",
+		"heroes_spectre",
+		"heroes_firebreak"
+	};
+
+	if (!name || !name[0])
+		return 0;
+
+	for (int i = 0; i <= 8; i++)
+	{
+		if (strcmp(name, heroes[i]) == 0)
+			return i;
+	}
+
+	return 0;
+}
+
+void SetChallengeValue(
+	__int64 root,
+	__int64 ctx,
+	const char* category,
+	const char* object,
+	const char* stat,
+	uint32_t value)
+{
+	if (!category || !category[0] || !stat || !stat[0])
+		return;
+
+	// playerstatslist.<stat>.challengeValue
+	if (!_stricmp(category, "global"))
+	{
+		SetUIntPath(root, ctx,
+			{
+				"playerstatslist",
+				stat,
+				"challengeValue"
+			}, value);
+
+		return;
+	}
+
+	// groupstats.<object>.stats.<stat>.challengeValue
+	if (!_stricmp(category, "group"))
+	{
+		SetUIntPath(root, ctx,
+			{
+				"groupstats",
+				object,
+				"stats",
+				stat,
+				"challengeValue"
+			}, value);
+
+		return;
+	}
+
+	// PlayerStatsByGameType.<object>.<stat>.challengeValue
+	if (!_stricmp(category, "gamemode"))
+	{
+		SetUIntPath(root, ctx,
+			{
+				"PlayerStatsByGameType",
+				object,
+				stat,
+				"challengeValue"
+			}, value);
+
+		return;
+	}
+
+	// itemstats.<index>.stats.<stat>.challengeValue
+	/*if (!_stricmp(category, "item") || !_stricmp(category, "weapon"))
+	{
+		uint32_t itemIndex = GetItemIndexFromStatTable(object);
+
+		SetUIntPath(root, ctx,
+			{
+				"itemstats",
+				intToConstCharPtr(itemIndex),
+				"stats",
+				stat,
+				"challengeValue"
+			}, value);
+
+		return;
+	}*/
+
+	// attachments.<object>.stats.<stat>.challengeValue
+	if (!_stricmp(category, "attachment"))
+	{
+		SetUIntPath(root, ctx,
+			{
+				"attachments",
+				object,
+				"stats",
+				stat,
+				"challengeValue"
+			}, value);
+
+		return;
+	}
+
+	// specialiststats.<index>.stats.<stat>.challengeValue
+	if (!_stricmp(category, "specialist") || !_stricmp(category, "hero"))
+	{
+		uint32_t specialistIndex = GetSpecialistIndex(object);
+
+		SetUIntPath(root, ctx,
+			{
+				"specialiststats",
+				intToConstCharPtr(specialistIndex),
+				"stats",
+				stat,
+				"challengeValue"
+			}, value);
+
+		return;
+	}
+}
+
+void UnlockMilestoneTable(
+	const char* tableName,
+	int start,
+	int end,
+	int valueColumn,
+	int categoryColumn,
+	int statColumn,
+	int objectColumn = 13)
+{
+	StringTable* table = nullptr;
+	StringTable_GetAsset(tableName, &table);
+
+	if (!table)
+		return;
+
+	auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
+	auto ctx = GetStatsBuffer(0);
+
+	for (int row = start; row <= end; row++)
+	{
+		const char* rowStr = intToConstCharPtr(row);
+
+		const char* valueStr = StringTable_Lookup(table, 0, rowStr, valueColumn);
+		const char* category = StringTable_Lookup(table, 0, rowStr, categoryColumn);
+		const char* stat = StringTable_Lookup(table, 0, rowStr, statColumn);
+		const char* objects = StringTable_Lookup(table, 0, rowStr, objectColumn);
+
+		if (!valueStr || !valueStr[0] || !category || !category[0] || !stat || !stat[0])
+			continue;
+
+		uint32_t value = std::strtoul(valueStr, nullptr, 10);
+
+		// Some rows target multiple objects separated by spaces.
+		std::vector<std::string> splitObjects = split(objects ? objects : "", ' ');
+
+		if (splitObjects.empty())
+		{
+			SetChallengeValue(root, ctx, category, nullptr, stat, value);
+		}
+		else
+		{
+			for (auto& obj : splitObjects)
+			{
+				if (!obj.empty())
+					SetChallengeValue(root, ctx, category, obj.c_str(), stat, value);
+			}
+		}
+	}
+}
+
 void setGameTypeStats() {
 
 	auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
@@ -997,7 +1217,7 @@ void setGameTypeStats() {
 	const char* gameModes[] = {
 		"ball", "conf", "ctf", "dem", "dm", "dom", "escort", "gun",
 		"hcconf", "hcctf", "hcdem", "hcdm", "hcdom", "hchq", "hckoth",
-		"hcsd", "hctdm", "hq", "koth", "sas", "sd", "tdm"
+		"hcsd", "hctdm", "hq", "koth", "sas", "sd", "tdm", "clean"
 	};
 
 	for (const char* mode : gameModes) {
@@ -1461,17 +1681,76 @@ void setMasterXP(int rank) {
 	ZeroMemory(result, sizeof(result));
 }
 
+
+/*
+arenastats()
+{
+	for(i = 0; i < 9; i++)
+	{
+		self setdstat("arenastats", i, "season", i);
+		self setdstat("arenastats", i, "points", 0xFFFFFF);
+		self setdstat("arenastats", i, "matchstartpoints", 0xFFFFFF);
+		self setdstat("arenastats", i, "skill", 99999.0);
+		self setdstat("arenastats", i, "winstreak", 0xFFFFFF);
+		self setdstat("arenastats", i, "wins", 0xFFFFFF);
+	}
+
+	self setdstat("arenaperseasonstats", "season", ArenaGetSlot());
+	self setdstat("arenaperseasonstats", "points", 0xFFFFFF);
+	self setdstat("arenaperseasonstats", "matchstartpoints", 0xFFFFFF);
+	self setdstat("arenaperseasonstats", "skill", 99999.0);
+	self setdstat("arenaperseasonstats", "winstreak", 0xFFFFFF);
+	self setdstat("arenaperseasonstats", "wins", 0xFFFFFF);
+
+	self setdstat("arenabest", "season", ArenaGetSlot());
+	self setdstat("arenabest", "points", 0xFFFFFF);
+	self setdstat("arenabest", "matchstartpoints", 0xFFFFFF);
+	self setdstat("arenabest", "skill", 99999.0);
+	self setdstat("arenabest", "winstreak", 0xFFFFFF);
+	self setdstat("arenabest", "wins", 0xFFFFFF);
+
+	self setdstat("playerstatslist", "arena_max_rank", "statvalue", 55);
+	self setdstat("playerstatslist", "arena_max_rank", "challengevalue", 65535);
+	self setdstat("playerstatslist", "arena_max_rank", "arenavalue", 55);
+	self setdstat("playerstatslist", "arena_season_wins", "statvalue", 65535);
+	self setdstat("playerstatslist", "arena_season_wins", "challengevalue", 65535);
+	self setdstat("playerstatslist", "arena_season_wins", "arenavalue", 65535);
+	self setdstat("playerstatslist", "arena_season_challenge_earned_tally", "statvalue", 65535);
+	self setdstat("playerstatslist", "arena_season_challenge_earned_tally", "challengevalue", 65535);
+	self setdstat("playerstatslist", "arena_season_challenge_earned_tally", "arenavalue", 65535);
+
+	for(i = 0; i < 12; i++)
+		self setdstat("arenachallengeseasons", i, i);
+
+	self setdstat("playerstatslist", "plevel", "arenavalue", 55);
+	self setdstat("playerstatslist", "rank", "arenavalue", 55);
+	self setdstat("playerstatslist", "rankxp", "arenavalue", 1000000);
+
+	wait .1;
+	uploadstats(self);
+}*/
+
 void setAllRanks()
 {
+
+
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	__int64 a1 = GetStatsBuffer(0);
+	
+	char result[2000];
+
+	if (bArena) {
+
+		SetValue(tmp, a1, result, { "playerstatslist", "plevel", "arenavalue"}, 55);
+		SetValue(tmp, a1, result, { "playerstatslist", "rank", "arenavalue" }, 55);
+		SetValue(tmp, a1, result, { "playerstatslist", "rankxp", "arenavalue" }, 1000000);
+		return;
+	}
+	
+
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
-	if (bArena) {
-		path[2] = "arenaValue";
-	}
-	char result[2000];
 
 	path[1] = "plevel";
 	DDL_MoveToPath(tmp, result, 3, path);
@@ -1508,6 +1787,35 @@ void setStats() {
 	path[0] = "PlayerStatsList";
 	path[2] = "statValue";
 	char result[2000];
+
+	if (bArena) {
+
+		for (int i = 0; i < 9; i++)
+		{
+			auto seasonStr = std::to_string(i);
+			SetValue(tmp, a1, result, { "arenastats", seasonStr.c_str(), "season" }, i);
+			SetValue(tmp, a1, result, { "arenastats", seasonStr.c_str(), "points" }, 100);
+
+		}
+
+		/*SetValue(tmp, a1, result, { "playerstatslist", "arena_max_rank", "statvalue" }, 55);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_max_rank", "challengevalue" }, 65535);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_max_rank", "arenavalue" }, 55);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_season_wins", "statvalue" }, 65535);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_season_wins", "challengevalue" }, 65535);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_season_wins", "arenavalue" }, 65535);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_season_challenge_earned_tally", "statvalue" }, 65535);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_season_challenge_earned_tally", "challengevalue" }, 65535);
+		SetValue(tmp, a1, result, { "playerstatslist", "arena_season_challenge_earned_tally", "arenavalue" }, 65535);*/
+
+		for (int j = 0; j < 12; j++) {
+			SetValue(tmp, a1, result, { "arenachallengeseasons", std::to_string(j).c_str() }, j);
+		}
+		return;
+
+	}
+
+
 
 	path[2] = "statValue";
 	if (bArena) {
@@ -1652,7 +1960,99 @@ void setStats() {
 
 }
 
-void setChallenges(const char* mode, const char* csv)
+/*
+void completeDailyChallenges()
+{
+
+	StringTable* table = nullptr;
+	StringTable_GetAsset("gamedata/stats/zm/statsmilestones4.csv", &table);
+
+	auto root = LiveStats_Core_GetRootDDLState(GetSessionState());
+	auto ctx = GetStatsBuffer(0);
+
+	char stateBuf[2000]{};
+	const char* path[3]{};
+
+	int rowCount = table->rowCount;
+
+	for (int row = 0; row < rowCount; row++)
+	{
+		const char* challengeName = StringTable_GetColumnValueForRow(table, row, 4);
+
+		if (!challengeName || !challengeName[0])
+			continue;
+
+		const char* targetStr = StringTable_GetColumnValueForRow(table, row, 2);
+
+		int value = 50000;
+
+		if (targetStr && targetStr[0])
+			value = std::stoi(targetStr);
+
+		if (!value) value = 50000;
+
+		path[0] = "playerStatsList";
+		path[1] = challengeName;
+		path[2] = "statValue";
+
+		if (DDL_MoveToPath(root, stateBuf, 3, path))
+			DDL_SetUInt((__int64)stateBuf, ctx, value);
+	}
+
+	LiveStorage_UploadStatsForController(0);
+
+}*/
+
+void completeDailyChallenges()
+{
+	StringTable* table = nullptr;
+	StringTable_GetAsset("gamedata/stats/zm/statsmilestones4.csv", &table);
+
+	auto root = LiveStats_Core_GetRootDDLState(GetSessionState());
+	auto ctx = GetStatsBuffer(0);
+
+	char stateBuf[2000]{};
+	const char* path[3]{};
+
+	int rowCount = table->rowCount;
+
+	// rowcount is 43, starts at 2
+	for (int row = 2; row < rowCount; row++)
+	{
+		const char* challengeName = StringTable_GetColumnValueForRow(table, row, 4);
+
+		if (!challengeName || !challengeName[0])
+			continue;
+
+		const char* targetStr = StringTable_GetColumnValueForRow(table, row, 2);
+
+		int value = 50000;
+
+		if (targetStr && targetStr[0])
+			value = std::stoi(targetStr);
+
+		if (!value) value = 50000;
+
+		path[0] = "playerStatsList";
+		path[1] = challengeName;
+		path[2] = "statValue";
+
+		if (DDL_MoveToPath(root, stateBuf, 3, path)) {
+			DDL_SetUInt((__int64)stateBuf, ctx, value);
+		}
+
+		path[2] = "challengeValue";
+
+		if (DDL_MoveToPath(root, stateBuf, 3, path))
+			DDL_SetUInt((__int64)stateBuf, ctx, value);
+
+	}
+
+	LiveStorage_UploadStatsForController(0);
+
+}
+
+void setStatMilestones(const char* mode, const char* csv)
 {
 	StringTable* table = nullptr;
 
@@ -1681,16 +2081,13 @@ void setChallenges(const char* mode, const char* csv)
 
 		const char* targetStr = StringTable_GetColumnValueForRow(table, row, 2);
 
-		int value = 50000; // fallback default
+		int value = 50000; 
 
 		if (targetStr && targetStr[0])
 			value = std::stoi(targetStr);
 
 		if (!value) value = 50000;
 
-		// -----------------------------
-		// playerstatslist.<name>.statValue
-		// -----------------------------
 		path[0] = "playerStatsList";
 		path[1] = challengeName;
 		path[2] = "statValue";
@@ -1698,9 +2095,6 @@ void setChallenges(const char* mode, const char* csv)
 		if (DDL_MoveToPath(root, stateBuf, 3, path))
 			DDL_SetUInt((__int64)stateBuf, ctx, value);
 
-		// -----------------------------
-		// playerstatslist.<name>.challengeValue
-		// -----------------------------
 		path[2] = "challengeValue";
 
 		if (DDL_MoveToPath(root, stateBuf, 3, path))
@@ -1731,214 +2125,104 @@ void setChallenges(const char* mode, const char* csv)
 //	LiveStorage_UploadStatsForController(0);
 //}
 
-void unlockContracts(int startID, int endID, int type)
+void unlockContracts(int start, int end, int type)
 {
-	StringTable* table = nullptr;
-	StringTable_GetAsset("gamedata/tables/mp/mp_contracttable.csv", &table);
-
-	auto RootState = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
-	auto DDLContext = GetStatsBuffer(0);
-
-	char stateBuf[2000]{};
-
-	for (int contractID = startID; contractID <= endID; contractID++)
+	while (start < end)
 	{
-		const char* path[3]{};
-		const char* statPath[3]{};
+		StringTable* table = nullptr;
+		StringTable_GetAsset("gamedata/tables/mp/mp_contracttable.csv", &table);
+		if (!table)
+			return;
 
-		std::string idStr = std::to_string(contractID);
+		auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
+		auto ctx = GetStatsBuffer(0);
 
-		// 🔥 Lookup by ContractID (NOT row index)
-		const char* ContractIDStr = StringTable_Lookup(table, 0, idStr.c_str(), 0);
-		if (!ContractIDStr || !ContractIDStr[0])
-			continue;
+		char state[2000]{};
+		const char* path[4]{};
 
-		const char* ChallengeValue = StringTable_Lookup(table, 0, idStr.c_str(), 2);
-		const char* ChallengeName = StringTable_Lookup(table, 0, idStr.c_str(), 7);
-		const char* ChallengeAlias = StringTable_Lookup(table, 0, idStr.c_str(), 8);
-		const char* ExtraBytes = StringTable_Lookup(table, 0, idStr.c_str(), 9);
+		const char* row = intToConstCharPtr(start);
 
-		int progress = (ChallengeValue && ChallengeValue[0]) ? std::stoi(ChallengeValue) : 0;
+		const char* contractID = StringTable_Lookup(table, 0, row, 0);
+		const char* challengeValue = StringTable_Lookup(table, 0, row, 2);
+		const char* challengeName = StringTable_Lookup(table, 0, row, 7);
+		const char* challengeAlias = StringTable_Lookup(table, 0, row, 8);
+		const char* extraPath = StringTable_Lookup(table, 0, row, 9);
 
-		// -----------------------------
-		// contracts.<type>.active = 1
-		// -----------------------------
 		path[0] = "contracts";
 		path[1] = intToConstCharPtr(type);
+
 		path[2] = "active";
+		if (DDL_MoveToPath(root, state, 3, path))
+			DDL_SetUInt((__int64)state, ctx, 1);
 
-		if (DDL_MoveToPath(RootState, stateBuf, 3, path))
-			DDL_SetUInt((__int64)stateBuf, DDLContext, 1);
-
-		// -----------------------------
-		// contracts.<type>.index = ID
-		// -----------------------------
 		path[2] = "index";
+		if (contractID && contractID[0] && DDL_MoveToPath(root, state, 3, path))
+			DDL_SetUInt((__int64)state, ctx, std::strtoul(contractID, nullptr, 10));
 
-		if (DDL_MoveToPath(RootState, stateBuf, 3, path))
-			DDL_SetUInt((__int64)stateBuf, DDLContext, contractID);
-
-		// -----------------------------
-		// contracts.<type>.progress = value
-		// -----------------------------
 		path[2] = "progress";
+		if (challengeValue && challengeValue[0] && DDL_MoveToPath(root, state, 3, path))
+			DDL_SetUInt((__int64)state, ctx, std::strtoul(challengeValue, nullptr, 10));
 
-		if (DDL_MoveToPath(RootState, stateBuf, 3, path))
-			DDL_SetUInt((__int64)stateBuf, DDLContext, progress);
-
-		// -----------------------------
-		// contracts.<type>.award_given = 1
-		// -----------------------------
 		path[2] = "award_given";
+		if (DDL_MoveToPath(root, state, 3, path))
+			DDL_SetUInt((__int64)state, ctx, 1);
 
-		if (DDL_MoveToPath(RootState, stateBuf, 3, path))
-			DDL_SetUInt((__int64)stateBuf, DDLContext, 1);
-
-		// =========================
-		// OPTIONAL WRITES
-		// =========================
-
-		if (ChallengeName && ChallengeName[0])
+		// Column 9: "extraBools 3" / "extraBytes 14"
+		if (extraPath && extraPath[0])
 		{
-			statPath[0] = "playerStatsList";
-			statPath[1] = ChallengeName;
-			statPath[2] = "statValue";
+			auto parts = split(extraPath, ' ');
 
-			if (DDL_MoveToPath(RootState, stateBuf, 3, statPath))
-				DDL_SetUInt((__int64)stateBuf, DDLContext, 1);
+			if (parts.size() >= 2 && !parts[0].empty() && !parts[1].empty())
+			{
+				const char* extraDDLPath[2]{};
+				extraDDLPath[0] = parts[0].c_str();
+
+				int extraIndex = std::strtoul(parts[1].c_str(), nullptr, 10);
+
+				/*if (DDL_MoveToPath(root, state, 2, extraDDLPath[0], extraIndex))
+				{
+					DDL_SetUInt((__int64)state, ctx, 1);
+				}*/
+
+				// If your DDL_MoveToPath only supports const char** paths,
+				// use this instead:
+				//
+				 std::string extraIndexStr = std::to_string(extraIndex);
+				 extraDDLPath[1] = extraIndexStr.c_str();
+				
+				 if (DDL_MoveToPath(root, state, 2, extraDDLPath))
+				     DDL_SetUInt((__int64)state, ctx, 1);
+			}
 		}
 
-		if (ChallengeAlias && ChallengeAlias[0])
+		if (challengeName && challengeName[0])
 		{
-			statPath[0] = "playerStatsList";
-			statPath[1] = ChallengeAlias;
-			statPath[2] = "statValue";
+			const char* statPath[3]{
+				"playerstatslist",
+				challengeName,
+				"statvalue"
+			};
 
-			if (DDL_MoveToPath(RootState, stateBuf, 3, statPath))
-				DDL_SetUInt((__int64)stateBuf, DDLContext, 1);
+			if (DDL_MoveToPath(root, state, 3, statPath))
+				DDL_SetUInt((__int64)state, ctx, 1);
 		}
 
-		if (ExtraBytes && ExtraBytes[0])
+		if (challengeAlias && challengeAlias[0])
 		{
-			std::vector<std::string> parts = split(ExtraBytes, ' ');
+			const char* statPath[3]{
+				"playerstatslist",
+				challengeAlias,
+				"statvalue"
+			};
 
-			std::vector<const char*> dynPath;
-			dynPath.reserve(parts.size());
-
-			for (auto& s : parts)
-				dynPath.push_back(s.c_str());
-
-			if (DDL_MoveToPath(RootState, stateBuf, (int)dynPath.size(), dynPath.data()))
-				DDL_SetUInt((__int64)stateBuf, DDLContext, 1);
+			if (DDL_MoveToPath(root, state, 3, statPath))
+				DDL_SetUInt((__int64)state, ctx, 1);
 		}
+
+		++start;
 	}
 }
 
-//void unlockContracts(int index, int max, int type) {
-//
-//	StringTable* table = nullptr;
-//	StringTable_GetAsset("gamedata/tables/mp/mp_contracttable.csv", &table);
-//	__int64 RootState = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
-//	__int64 DDLContext = GetStatsBuffer(0);
-//
-//	while (index < max) {
-//		
-//		const char* path[8]{};
-//		const char* statPath[8]{};
-//		
-//		char toState[2000]{};
-//
-//		auto value = intToConstCharPtr(index);
-//		auto ContractID = StringTable_Lookup(table, 0i64, value, 0);
-//		auto ChallengeValue = StringTable_Lookup(table, 0i64, value, 2);
-//		auto ChallengeName = StringTable_Lookup(table, 0i64, value, 7);
-//		auto ChallengeAlias = StringTable_Lookup(table, 0i64, value, 8);
-//		auto ExtraBytes = StringTable_Lookup(table, 0i64, value, 9);
-//
-//		path[0] = "contracts";
-//		path[1] = intToConstCharPtr(type);
-//
-//		path[2] = "active";
-//
-//		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-//			DDL_SetUInt((__int64)toState, DDLContext, 1);
-//			ZeroMemory(toState, sizeof(toState));
-//		}
-//
-//		path[2] = "index";
-//
-//		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-//			auto iContractID = std::stoi(ContractID);
-//			DDL_SetUInt((__int64)toState, DDLContext, iContractID);
-//			ZeroMemory(toState, sizeof(toState));
-//		}
-//
-//		path[2] = "progress";
-//
-//		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-//			auto iChallengeValue = std::stoi(ChallengeValue);
-//			DDL_SetUInt((__int64)toState, DDLContext, iChallengeValue);
-//			ZeroMemory(toState, sizeof(toState));
-//		}
-//
-//		path[2] = "award_given";
-//
-//		if (DDL_MoveToPath(RootState, toState, 3, path)) {
-//			DDL_SetUInt((__int64)toState, DDLContext, 1);
-//			ZeroMemory(toState, sizeof(toState));
-//		}
-//
-//		if (ChallengeName != nullptr && ChallengeName[0] != '\0') {
-//
-//			statPath[0] = "playerStatsList";
-//			statPath[1] = ChallengeName;
-//			statPath[2] = "statValue";
-//
-//			if (DDL_MoveToPath(RootState, toState, 3, statPath)) {
-//				DDL_SetUInt((__int64)toState, DDLContext, 1);
-//				ZeroMemory(toState, sizeof(toState));
-//			}
-//
-//		}
-//
-//		if (ChallengeAlias != nullptr && ChallengeAlias[0] != '\0') {
-//
-//			statPath[0] = "playerStatsList";
-//			statPath[1] = ChallengeAlias;
-//			statPath[2] = "statValue";
-//
-//			if (DDL_MoveToPath(RootState, toState, 3, statPath)) {
-//				DDL_SetUInt((__int64)toState, DDLContext, 1);
-//				ZeroMemory(toState, sizeof(toState));
-//			}
-//
-//		}
-//
-//		if (ExtraBytes != nullptr && ExtraBytes[0] != '\0') {
-//
-//			const char* sepPath[8]{};
-//
-//			// Split the string into sep parts
-//			//auto sep = utils::splitString(ExtraBytes);
-//			std::vector<std::string> sep = split(ExtraBytes, ' ');
-//
-//			for (int i = 0; i < sep.size(); i++) {
-//				sepPath[i] = sep[i].data();
-//			}
-//
-//			int depth = sep.size();
-//
-//			if (DDL_MoveToPath(RootState, toState, depth, sepPath)) {
-//				DDL_SetUInt((__int64)toState, DDLContext, 1);
-//				ZeroMemory(toState, sizeof(toState));
-//			}
-//
-//		}
-//
-//		index++;
-//	}
-//
-//}
 
 void resetCrypto() {
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
@@ -2086,6 +2370,8 @@ void setMaxMapStats(int round) {
 	}
 	LiveStorage_UploadStatsForController(0);
 }
+
+
 
 
 // Dvar
@@ -2465,6 +2751,13 @@ void DrawSlotTable(CACSlot* table, int count, int classSetIndex, int classIndex)
 	}
 }
 
+
+static int tab = 0;
+
+const int tabCount = 9;
+
+bool jumped = false;
+
 void draw() {
 
 	RECT desktop;
@@ -2533,7 +2826,6 @@ void draw() {
 	{
 		*(int*)((DWORD64)OFFSET(0x17DF0405)) = 0;
 
-		// 1. Setup Background Dimming
 		RECT desktop;
 		const HWND hDesktop = GetDesktopWindow();
 		GetWindowRect(hDesktop, &desktop);
@@ -2545,8 +2837,6 @@ void draw() {
 			IM_COL32(0, 0, 0, 150)
 		);
 
-		// 2. Set Window Position (Center of Screen) and Size
-		// Increased size slightly to accommodate larger text
 		ImVec2 window_size = ImVec2(600.0f, 250.0f);
 		ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
 		ImGui::SetNextWindowPos(
@@ -2555,11 +2845,9 @@ void draw() {
 			ImVec2(0.5f, 0.5f)
 		);
 
-		// 3. Render Disclaimer Window
 		if (ImGui::Begin(" - Disclaimer - ", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize))
 		{
-			// --- INCREASE TEXT SIZE ---
-			ImGui::SetWindowFontScale(1.3f); // Scales text to 120% size
+			ImGui::SetWindowFontScale(1.3f);
 
 			ImGui::Spacing();
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
@@ -2572,22 +2860,18 @@ void draw() {
 			);
 
 			ImGui::PopTextWrapPos();
-			ImGui::Dummy(ImVec2(0, 25)); // Vertical padding
+			ImGui::Dummy(ImVec2(0, 25)); 
 
-			// 4. Action Buttons
 			ImGui::Separator();
 			ImGui::Spacing();
-			ImGui::Dummy(ImVec2(0, 25)); // Vertical padding
+			ImGui::Dummy(ImVec2(0, 25));
 
-			// --- CENTER BUTTONS ---
-			float button_width = 130.0f; // Slightly wider for larger text
+			float button_width = 130.0f;
 			float Gaps = ImGui::GetStyle().ItemSpacing.x;
 			int num_buttons = 2;
 
-			// Calculate total width of all buttons + the space between them
 			float total_buttons_width = (num_buttons * button_width) + Gaps;
 
-			// Move cursor to center
 			ImGui::SetCursorPosX((ImGui::GetWindowSize().x - total_buttons_width) * 0.5f);
 
 			if (ImGui::Button("Okay##DISCLAIMER", ImVec2(button_width, 40))) {
@@ -2600,13 +2884,11 @@ void draw() {
 				ShellExecuteA(0, "open", "https://github.com/Scroptss/Scropts-QOL/releases", 0, 0, SW_SHOW);
 			}
 
-			// Reset font scale so other windows aren't affected
 			ImGui::SetWindowFontScale(1.0f);
 			ImGui::End();
 
 		}
 	}
-
 
 	if (open && bDisclaimerShown) {
 
@@ -2625,15 +2907,18 @@ void draw() {
 
 		ImGui::Begin(title.c_str(), &open);
 
-		ImGui::BeginTabBar("##main");
+		ImGui::BeginTabBar("##main");		
 
-		if (ImGui::BeginTabItem("Account")) {
+		ImGuiTabItemFlags flags0 = (bController && tab == 0) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Account", nullptr, flags0)) {
 
 			auto currentMode = Com_SessionMode_GetMode();
 			int maxXP = 1457200;
 			int maxParagonXP = 52542000;
+			int maxLevel = 54;
 
 			if(currentMode == MODE_CAMPAIGN) {
+				maxLevel = 19;
 				maxXP = 581651;
 				maxParagonXP = 0;
 				minRank = 0;
@@ -2721,7 +3006,7 @@ void draw() {
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Level ##RANK", &pLevel, 0, 54);
+			ImGui::SliderInt("Level ##RANK", &pLevel, 0, maxLevel);
 
 			// XP max: CP - 581651, MP - 1457200, ZM - 1375000
 			if (ImGui::Button("Send##XP")) {
@@ -2974,24 +3259,29 @@ void draw() {
 				unlockContracts(1000, 1030, 2);
 				unlockContracts(3000, 3029, 3);
 				LiveStorage_UploadStatsForController(0);
-				ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "Contracts Unlocked! Join and leave at least 9 public \nmatches to make contract rewards appear in your inventory" });
+				ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "Contracts Unlocked! Join and leave at least 9 public \nmatches to make contract rewards appear in your inventory\n\nCheck force host, search for MP match, and use Launch game button (MP tab)\nto make this process quicker." });
 			}
 
 			if (ImGui::Button("Complete Challenges")) {
-				setChallenges("mp","statsmilestones1.csv");
-				setChallenges("mp","statsmilestones2.csv");
-				setChallenges("mp","statsmilestones3.csv");
-				setChallenges("mp","statsmilestones4.csv");
-				setChallenges("mp","statsmilestones5.csv");
-				setChallenges("mp","statsmilestones6.csv");
+				UnlockMilestoneTable("mp_statstable", 0, 256, 9, 2, 3);
+				setStatMilestones("mp","statsmilestones1.csv");
+				setStatMilestones("mp","statsmilestones2.csv");
+				setStatMilestones("mp","statsmilestones3.csv");
+				setStatMilestones("mp","statsmilestones4.csv");
+				setStatMilestones("mp","statsmilestones5.csv");
+				setStatMilestones("mp","statsmilestones6.csv");
 
-				setChallenges("zm","statsmilestones3.csv");
+				setStatMilestones("zm","statsmilestones3.csv");
 
-				setChallenges("cp","statsmilestones1.csv");
-				setChallenges("cp","statsmilestones3.csv");
-
+				setStatMilestones("cp","statsmilestones1.csv");
+				setStatMilestones("cp","statsmilestones3.csv");
+				unlockArenaStats();
 				setGameTypeStats();
 				LiveStorage_UploadStatsForController(0);
+			}
+
+			if (ImGui::Button("Complete ZM Daily Challenge")) {
+				completeDailyChallenges();
 			}
 
 			if (ImGui::Button("Complete Hero Challenges")) {
@@ -2999,35 +3289,35 @@ void draw() {
 			}
 
 			if (ImGui::Button("Complete Campaign")) {
-				Cbuf_AddText(0, "achievement CP_COMPLETE_PROLOGUE");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_NEWWORLD");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_BLACKSTATION");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_BIODOMES");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_SGEN");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_VENGEANCE");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_RAMSES");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_INFECTION");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_AQUIFER");
-				Cbuf_AddText(0, "achievement CP_COMPLETE_LOTUS");
-				Cbuf_AddText(0, "achievement CP_HARD_COMPLETE");
-				Cbuf_AddText(0, "achievement CP_REALISTIC_COMPLETE");
-				Cbuf_AddText(0, "achievement CP_CAMPAIGN_COMPLETE");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_PROLOGUE");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_NEWWORLD");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_BLACKSTATION");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_BIODOMES");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_SGEN");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_VENGEANCE");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_RAMSES");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_INFECTION");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_AQUIFER");
+				LiveAchievements_GiveAchievement("CP_COMPLETE_LOTUS");
+				LiveAchievements_GiveAchievement("CP_HARD_COMPLETE");
+				LiveAchievements_GiveAchievement("CP_REALISTIC_COMPLETE");
+				LiveAchievements_GiveAchievement("CP_CAMPAIGN_COMPLETE");
 				CompleteAllMissions();
 			}
 
 			if (ImGui::Button("Max Collectibles")) {
-				Cbuf_AddText(0, "achievement CP_ALL_COLLECTIBLES");
-				Cbuf_AddText(0, "achievement CP_MISSION_COLLECTIBLES");
+				LiveAchievements_GiveAchievement("CP_ALL_COLLECTIBLES");
+				LiveAchievements_GiveAchievement("CP_MISSION_COLLECTIBLES");
 				UnlockAllCollectibles();
 			}
 
 			if (ImGui::Button("Max Accolades")) {
-				Cbuf_AddText(0, "achievement CP_ALL_COLLECTIBLES");
+				LiveAchievements_GiveAchievement("CP_ALL_COLLECTIBLES");
 				UnlockAllAccolades();
 			}
 
 			if (ImGui::Button("Max Medals")) {
-				Cbuf_AddText(0, "achievement CP_ALL_DECORATIONS");
+				LiveAchievements_GiveAchievement("CP_ALL_DECORATIONS");
 				UnlockAllMedals();
 			}
 
@@ -3044,7 +3334,10 @@ void draw() {
 			ImGui::EndTabItem();
 		}
 
-		if (ImGui::BeginTabItem("Zombies")) {
+		ImGuiTabItemFlags flags1 = (bController && tab == 1) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Zombies", nullptr, flags1)) {
+
+			ImGui::BeginChild("##ZOMBIES", ImGui::GetContentRegionAvail());
 
 			ImGui::Dummy(ImVec2(0, 5));
 
@@ -3291,13 +3584,15 @@ void draw() {
 				setGobblePackName(PackIndex, sPackName);
 			}
 
-
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 
 		}
 
-		if (ImGui::BeginTabItem("Multiplayer")) {
+		ImGuiTabItemFlags flags2 = (bController && tab == 2) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Multiplayer", nullptr, flags2)) {
 
+			ImGui::BeginChild("##MULTIPLAYER", ImGui::GetContentRegionAvail());
 			ImGui::Dummy(ImVec2(0, 5));
 
 			if (ImGui::Button("Launch MP Game")) {
@@ -3324,7 +3619,13 @@ void draw() {
 			if (ImGui::IsItemHovered()) {
 				ImGui::SetTooltip("Make sure you enable this AFTER the 10 second countdown!");
 			}
-			
+
+			int g = 9999999999999999999;
+
+			if (ImGui::Button("Modded Lobby##GSPEED")) {
+				auto callvote = "callvote map \"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nfast_restart\nset scr_tdm_score_kill 9999999999\nscr_xpscaleMP 99999\"";
+				CL_AddReliableCommand(0, callvote);
+			}			
 
 			ImGui::Separator();
 
@@ -3433,12 +3734,13 @@ void draw() {
 
 				LiveStats_SetShowcaseWeapon(MODE_MULTIPLAYER, CUSTOMIZATION_STATS_LOCATION_STATS, DDLContextForLocation, CAC_TYPE_INVALID, characterIndex, setVariant);
 			}
-
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 		}
 
-		if (ImGui::BeginTabItem("BlackMarket")) {
-
+		ImGuiTabItemFlags flags3 = (bController && tab == 3) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("BlackMarket", nullptr, flags3)) {
+			ImGui::BeginChild("##BLACKMARKET", ImGui::GetContentRegionAvail());
 			ImGui::Dummy(ImVec2(0, 5));
 
 			ImGui::SliderInt("Loot Speed (ms)", &iLootSpeed, 5, 500);
@@ -3533,12 +3835,13 @@ void draw() {
 				ImGui::EndCombo();
 			}
 
-
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 		}
 
-		if (ImGui::BeginTabItem("Spoof")) {
-
+		ImGuiTabItemFlags flags4 = (bController && tab == 4) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Spoof", nullptr, flags4)) {
+			ImGui::BeginChild("##SPOOF", ImGui::GetContentRegionAvail());
 			ImGui::Dummy(ImVec2(0, 5));
 
 			ImGui::Checkbox("Unlock Full Game (DLC)", &bUnlockFullGame);
@@ -3622,12 +3925,15 @@ void draw() {
 
 			HelpMarker("Allows you to edit old emblems downloaded through other menus.");
 
-
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 
 		}
 
-		if (ImGui::BeginTabItem("Class Editor")) {
+		ImGuiTabItemFlags flags5 = (bController && tab == 5) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Class Editor", nullptr, flags5)) {
+
+			ImGui::BeginChild("##CLASSEDITORR", ImGui::GetContentRegionAvail());
 
 			ImGui::Dummy(ImVec2(0, 5));
 
@@ -3676,11 +3982,12 @@ void draw() {
 				ImGui::SetTooltip("Make sure you are in the Create-A-Class menu.");
 			}
 
-
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 		}
 		
-		if (ImGui::BeginTabItem("Weapon Stats"))
+		ImGuiTabItemFlags flags6 = (bController && tab == 6) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Weapon Stats", nullptr, flags6))
 		{
 
 			ImGui::BeginChild("##WEPRANKING", ImGui::GetContentRegionAvail());
@@ -3771,7 +4078,9 @@ void draw() {
 
 		}
 
-		if (ImGui::BeginTabItem("Tools")) {
+		ImGuiTabItemFlags flags7 = (bController && tab == 7) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Tools", nullptr, flags7)) {
+			ImGui::BeginChild("##TOOLS", ImGui::GetContentRegionAvail());
 
 			ImGui::Dummy(ImVec2(0, 5));
 
@@ -3882,16 +4191,21 @@ void draw() {
 				}
 				ImGui::EndCombo();
 			}
-
+			ImGui::EndChild();
 
 			ImGui::EndTabItem();
 		}
 
-		if (ImGui::BeginTabItem("Info")) {
+		ImGuiTabItemFlags flags8 = (bController && tab == 8) ? ImGuiTabItemFlags_SetSelected : 0;
+		if (ImGui::BeginTabItem("Info", nullptr, flags8)) {
+
+			ImGui::BeginChild("##INFO", ImGui::GetContentRegionAvail());
 					
 			ImGui::Dummy(ImVec2(0, 5));
 			ImGui::InputTextWithHint("##TITLE", "Screenshot Title", &custom_title_buf);
 			ImGui::InputTextWithHint("##DESC", "Screenshot Description", &custom_desc_buf);
+
+			ImGui::Checkbox("Controller Navigation", &bController);
 			
 			ImGui::Dummy(ImVec2(10, 10));
 			ImGui::Text("Version: %s", SCROPTS_VERSION);
@@ -3911,7 +4225,7 @@ void draw() {
 
 			//ImGui::SameLine();
 			//ImGui::Text("Int Result: %d", lastIntResult);
-
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 
 		}
@@ -4150,6 +4464,143 @@ void MergeIconsWithLatestFont(float font_size, bool FontDataOwnedByAtlas = false
 	ImGui::GetIO().Fonts->AddFontFromMemoryTTF((void*)fa_solid_900, sizeof(fa_solid_900), font_size, &icons_config, icons_ranges);
 }
 
+const char* tabs[] =
+{
+	"Account",
+	"Zombies",
+	"Multiplayer",
+	"BlackMarket",
+	"Spoof",
+	"Class Editor",
+	"Weapon Stats",
+	"Tools",
+	"Info"
+};
+
+bool IsControllerActive()
+{
+	XINPUT_STATE state{};
+	if (XInputGetState(0, &state) != ERROR_SUCCESS)
+		return false;
+
+	const auto& g = state.Gamepad;
+
+	// Buttons
+	/*if (g.wButtons != 0)
+		return true;*/
+
+	// Bumpers
+	if (g.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER || g.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER)
+		return true;
+
+	// Sticks
+	/*if (abs(g.sThumbLX) > 8000 || abs(g.sThumbLY) > 8000 ||
+		abs(g.sThumbRX) > 8000 || abs(g.sThumbRY) > 8000)
+		return true;*/
+
+	return false;
+}
+
+float lastControllerTime = 0.0f;
+
+void UpdateInputMode()
+{
+	ImGuiIO& io = ImGui::GetIO();
+
+	if (IsControllerActive())
+	{
+
+		bController = true;
+		lastControllerTime = (float)ImGui::GetTime();
+	}
+
+	// Stay in controller mode for 2 seconds after last input
+	if ((ImGui::GetTime() - lastControllerTime) > 0.20f)
+	{
+		bController = false;
+	}
+}
+
+void UpdateController(bool open)
+{
+	if (!open)
+		return;
+
+	XINPUT_STATE state{};
+	if (XInputGetState(0, &state) != ERROR_SUCCESS)
+		return;
+
+	ImGuiIO& io = ImGui::GetIO();
+
+	const float deadzone = 8000.0f;
+	float lx = (float)state.Gamepad.sThumbLX;
+	float ly = (float)state.Gamepad.sThumbLY;
+	float ry = (float)state.Gamepad.sThumbRY;
+	bool lb = state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
+	bool rb = state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
+
+	// Deadzone
+	if (fabs(lx) < deadzone) lx = 0.0f;
+	if (fabs(ly) < deadzone) ly = 0.0f;
+	if (fabs(ry) < deadzone) ry = 0.0f;
+
+
+	// Normalize [-1,1]
+	lx /= 32767.0f;
+	ly /= 32767.0f;
+	ry /= 32767.0f;
+
+	float mag = sqrtf(lx * lx + ly * ly);
+	if (mag > 1.0f) mag = 1.0f;
+	float accel = mag * mag;
+
+	float speed = 10.0f;
+
+	float scroll = ry * fabs(ry); // quadratic
+	io.MouseWheel += scroll * 0.5f;
+
+	io.MousePos.x += lx * speed * accel;
+	io.MousePos.y -= ly * speed * accel;
+
+	// Clamp to screen
+	io.MousePos.x = ImClamp(io.MousePos.x, 0.0f, io.DisplaySize.x);
+	io.MousePos.y = ImClamp(io.MousePos.y, 0.0f, io.DisplaySize.y);
+
+	// Buttons (example)
+	io.MouseDown[0] = (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) != 0; // left click
+	//io.MouseDown[1] = (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;  // right click
+	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow))
+	{
+		io.MouseWheel += ry * 0.5f;
+	}
+	// invert if needed (stick up = scroll up usually)
+
+	static bool prevLB = false;
+	static bool prevRB = false;
+
+	if (rb && !prevRB)
+		tab = (tab + 1) % tabCount;
+
+	if (lb && !prevLB)
+		tab = (tab - 1 + tabCount) % tabCount;
+
+	prevLB = lb;
+	prevRB = rb;
+
+}
+
+bool IsStartPressed()
+{
+	XINPUT_STATE state{};
+	if (XInputGetState(0, &state) != ERROR_SUCCESS)
+		return false;
+
+	bool l2Pressed = state.Gamepad.bLeftTrigger > 30;
+	bool xPressed = (state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
+
+	return l2Pressed && xPressed;
+}
+
 HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
 	if (!init)
@@ -4179,10 +4630,21 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 		open = !open;
 	}
 
+	static bool prev = false;
+
+	bool curr = IsStartPressed();
+
+	if (curr && !prev)
+	{
+		open = !open;
+	}
+
+	prev = curr;
+
 	hooks::onFrame();
 
 	if (bDivinium) {
-		if (clock() - UnlockTMR > 5) {
+		if (clock() - UnlockTMR > iLootSpeed) {
 			char buf_cmd[255];
 			sprintf_s(buf_cmd, "%c %u %u", 120, 3, 250);
 			SV_GameSendServerCommand(0, 1, buf_cmd);
@@ -4191,9 +4653,10 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 	}
 
 	if (bCrypto) {
-		GiveLootToSelf(0, 1, 1500);
-		UnlockTMR = clock();
-
+		if (clock() - UnlockTMR > iLootSpeed) {
+			GiveLootToSelf(0, 1, iCryptoAmt);
+			UnlockTMR = clock();
+		}
 	}
 
 	if (bCryptoSpend) {
@@ -4220,6 +4683,8 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 
 	ImGui_ImplDX11_NewFrame();
 	ImGui_ImplWin32_NewFrame();
+	UpdateController(open);
+	UpdateInputMode();
 	ImGui::NewFrame();
 
 	draw();
@@ -4269,8 +4734,5 @@ BOOL WINAPI DllMain(HMODULE hMod, DWORD dwReason, LPVOID lpReserved)
 }
 
 /* TODO
-* - 
 * - Clean up the menu, improve GUI code in general, add more tooltips and notifications, etc. Maybe phantom UI?
-* - Check for t7Patch.dll, if so dont init protections / arxan since its all taken care of already.
-* - Disclaimer
 */
