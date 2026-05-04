@@ -284,4 +284,3 @@ extern std::string wildcardPreviews[9];
 
 extern std::vector<std::string> legit_packets;
 extern std::vector<bullet_tracer> tracers;
-extern std::vector<ModCheckReturnAddr> g_ModCheckReturnAddrs;

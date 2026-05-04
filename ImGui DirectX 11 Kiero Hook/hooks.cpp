@@ -932,13 +932,13 @@ namespace hooks {
 
 				*packedPtr = sanitized;
 
-				ImGui::InsertNotification({
+				/*ImGui::InsertNotification({
 					ImGuiToastType::Warning,
 					3000,
 					"Crash Attempt: Presence player count clamped: %d -> %d",
 					count,
 					maxPlayers
-					});
+					});*/
 			}
 
 			return LivePresence_Serialize(a1, a2);

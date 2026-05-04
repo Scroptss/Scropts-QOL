@@ -141,7 +141,6 @@ tGetPersonaName oGetPersonaName;
 tLiveSteam_FilterPersonaName oLiveSteam_FilterPersonaName = (tLiveSteam_FilterPersonaName)(ProcessBase + 0x1EA3EF0);
 
 std::vector<bullet_tracer> tracers;
-std::vector<ModCheckReturnAddr> g_ModCheckReturnAddrs;
 
 std::string primaryPreviews[10];
 std::string secondaryPreviews[10];
