@@ -24,6 +24,51 @@ namespace hooks {
 	uint32_t custom_thumb_buf_size = 0;
 	char* custom_thumb_buf = new char[0x88000];
 
+	const std::vector<uintptr_t> isModLoadedAddrs =
+	{
+		{ 0x20EB3C4 },
+		{ 0x20EB3E4 },
+		{ 0x20EB324 },
+		{ 0x20EB2F4 },
+		{ 0x20EAD97 },
+		{ 0x13E6A74 },
+		{ 0x15E7EDB },
+		{ 0x15E87DB },
+		{ 0x15EBAE9 },
+		{ 0x15F1F29 },
+		{ 0x15F1FD9 },
+		{ 0x15F20A0 },
+		{ 0x15F7F60 },
+		{ 0x1A80D1D },
+		{ 0x1A9AD29 },
+		{ 0x1E9432B },
+		{ 0x1E9C8AE },
+		{ 0x1EA5669 },
+		{ 0x1EBF6CD },
+		{ 0x20EAD5D },
+		{ 0x1FC6769 },
+	};
+
+	uintptr_t GetCallsiteFromReturn(void* returnAddress)
+	{
+		uint8_t* ret = (uint8_t*)returnAddress;
+
+		if (ret[-5] == 0xE8)
+		{
+			return (uintptr_t)(ret - 5);
+		}
+
+		for (int i = 1; i <= 16; i++)
+		{
+			if (ret[-i] == 0xE8)
+			{
+				return (uintptr_t)(ret - i);
+			}
+		}
+
+		return (uintptr_t)returnAddress;
+	}
+
 	bool is_user_in_game()
 	{
 		return Live_IsUserInGame(0);
@@ -150,6 +195,37 @@ namespace hooks {
 	namespace functions {
 
 		// Patches
+
+		char hkMods_IsModsLoaded()
+		{
+			void* ret = _ReturnAddress();
+			uintptr_t base = (uintptr_t)GetModuleHandle(NULL);
+
+			uintptr_t callsite = GetCallsiteFromReturn(ret);
+			uintptr_t relativeCall = callsite - base;
+
+			if (bModTools)
+			{
+				for (auto addr : isModLoadedAddrs)
+				{
+					if (relativeCall == addr)
+					{
+						return 0;
+					}
+				}
+			}
+
+			return Mods_IsModsLoaded();
+		}
+
+		char hkMods_IsModsLoaded_1() {
+
+			if (bModTools) {
+				return 0;
+			}
+
+			return Mods_IsModsLoaded_1();
+		}
 
 		char hkCom_Error(const char* a1, int a2, unsigned int a3, const char* fmt, ...)
 		{
@@ -1049,6 +1125,8 @@ namespace hooks {
 
 	void applyPatches() {
 
+		MH_CreateHook((LPVOID)(ProcessBase + 0x20C8F60), functions::hkMods_IsModsLoaded, (LPVOID*)&Mods_IsModsLoaded);
+		MH_CreateHook((LPVOID)(ProcessBase + 0x20C9AE0), functions::hkMods_IsModsLoaded_1, (LPVOID*)&Mods_IsModsLoaded_1);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x22C9650), functions::hkflsomeWeirdCharacterIndex, (LPVOID*)&flsomeWeirdCharacterIndex);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1EAAD60), functions::hkUserHasLicenseForApp, (LPVOID*)&UserHasLicenseForApp);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1321130), functions::hkCL_GetConfigString, (LPVOID*)&CL_GetConfigString);
@@ -1081,22 +1159,31 @@ namespace hooks {
 
 	void restorePatches() {
 
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x20C8F60));		//Mods_IsModsLoaded
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x20C9AE0));		//Mods_IsModsLoaded_1
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x22C9650));		//flsomeWeirdCharacterIndex
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EAAD60));		//hkUserHasLicenseForApp
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1321130));		//hkCL_GetConfigString
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x134CD70));		//hkCL_ConnectionlessCMD
-		//MH_RemoveHook((LPVOID)(ProcessBase + 0x1EEA320));		//hkLobbyMsgRW_PackageElement
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980980));		//G_Damage
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x60F920));		//CG_Draw2D
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1189E10));		//CG_BulletHitEvent_Internal
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1D10840));		//hkR_ConvertColorToBytes
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x268CC60));		//hkUI_IsRenderingImmediately
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DE9E10));		//hkFileshare_GetSummaryFileAuthorXUID
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E7B060));		//hkFileshare_CanDownloadFile
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EAAD60));		//hkUserHasLicenseForApp
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFCC60));		//hkLiveInventory_GetItemQuantity
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E06110));		//hkLiveEntitlements_IsEntitlementActiveForController
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFC580));		//hkLiveInventory_AreExtraSlotsPurchased
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFCC60));		//hkLiveInventory_GetItemQuantity
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EBB200));		//hkLive_UserGetName
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x22C9650));		//flsomeWeirdCharacterIndex
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591050));		//Demo_SaveScreenshotToContentServer
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591590));		//Demo_SetMetaData	
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591050));		//Demo_SaveScreenshotToContentServer
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DE9E10));		//hkFileshare_GetSummaryFileAuthorXUID
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E7B060));		//hkFileshare_CanDownloadFile
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x134CD70));		//hkCL_ConnectionlessCMD
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1F28860));		//UI_Interface_DrawText
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E85450));		//LivePresence_Serialize
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EEA320));		//hkLobbyMsgRW_PackageElement
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x143A620));		//dwInstantDispatchMessage
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFDFE0));		//LiveInventory_IsValid
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x20EC0B0));		//Com_Error	
 		MH_DisableHook(MH_ALL_HOOKS);
 
 	}

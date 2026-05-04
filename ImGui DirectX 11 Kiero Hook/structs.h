@@ -1,6 +1,12 @@
 #pragma once
 #include "includes.h"
 
+struct ModCheckReturnAddr
+{
+	uintptr_t relativeAddr;
+	bool block = true;
+};
+
 using ClientNum_t = std::uint32_t;
 
 enum HookReturn

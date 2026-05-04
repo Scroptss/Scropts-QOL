@@ -3385,6 +3385,8 @@ void draw() {
 
 			}
 
+			ImGui::Checkbox("Online Rank / Gobblegums in Workshop Maps", &bModTools);
+
 			ImGui::Separator();
 
 			ImGui::Dummy(ImVec2(0, 5));
@@ -4225,6 +4227,9 @@ void draw() {
 
 			//ImGui::SameLine();
 			//ImGui::Text("Int Result: %d", lastIntResult);
+
+		
+
 			ImGui::EndChild();
 			ImGui::EndTabItem();
 

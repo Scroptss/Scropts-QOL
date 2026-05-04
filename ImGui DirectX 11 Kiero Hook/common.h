@@ -75,6 +75,7 @@ extern bool bUIRgb;
 extern bool bUnlockDLC;
 extern bool bUnlockFullGame;
 extern bool bNukes;
+extern bool bModTools;
 
 extern char spoofName[32];
 
@@ -227,6 +228,8 @@ const static auto LobbyTypes_GetMainMode = reinterpret_cast<LobbyMainMode(__cdec
 const static auto Loot_BuyCrate = reinterpret_cast<bool(*)(int ControllerIndex, int CrateType, unsigned int CurrencyType)>(ProcessBase + 0x1E760B0);
 const static auto Loot_SpendVials = reinterpret_cast<bool(*)(unsigned int ControllerIndex, int VialNum)>(ProcessBase + 0x1E77490);
 const static auto Memset = reinterpret_cast<int(__fastcall*)(char* a1, __int64 a2, unsigned __int64 a3)>(ProcessBase + 0x2BC53B0);
+const static auto Mods_IsModsLoaded = reinterpret_cast<bool(__fastcall*)()>(ProcessBase + 0x20C8F60);
+const static auto Mods_IsModsLoaded_1 = reinterpret_cast<bool(__fastcall*)()>(ProcessBase + 0x20C9AE0);
 const static auto MSG_BeginReading = reinterpret_cast<void(*)(msg_t*)>(ProcessBase + 0x20FC900);
 const static auto MSG_InfoResponse = reinterpret_cast<bool(*)(void*, LobbyMsg*)>(ProcessBase + 0x1ED5B40);
 const static auto MSG_InitReadOnly = reinterpret_cast<void(*)(msg_t*, const char*, int)>(ProcessBase + 0x20FCC10);
@@ -281,3 +284,4 @@ extern std::string wildcardPreviews[9];
 
 extern std::vector<std::string> legit_packets;
 extern std::vector<bullet_tracer> tracers;
+extern std::vector<ModCheckReturnAddr> g_ModCheckReturnAddrs;
