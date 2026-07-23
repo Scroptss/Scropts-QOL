@@ -4630,10 +4630,13 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 			return decltype(&hkPresent)(oPresent)(pSwapChain, SyncInterval, Flags);
 	}
 
-	if (GetAsyncKeyState(OpenKeybind) & 1)
-	{
-		open = !open;
-	}
+  static bool openKeyWasDown = false;
+  bool openKeyIsDown = (GetAsyncKeyState(OpenKeybind) & 0x8000) != 0;
+  if (openKeyIsDown && !openKeyWasDown)
+  {
+      open = !open;
+  }
+  openKeyWasDown = openKeyIsDown;
 
 	static bool prev = false;
 
