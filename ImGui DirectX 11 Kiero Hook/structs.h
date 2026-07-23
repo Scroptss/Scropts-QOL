@@ -2606,3 +2606,124 @@ static_assert(sizeof(CompositeJob) == 0x1C80);
 static_assert(offsetof(CompositeJob, id) == 0x14);
 static_assert(offsetof(CompositeJob, resultImage) == 0x1C68);
 static_assert(offsetof(CompositeJob, cancel) == 0x1C74);
+
+
+
+/*
+#pragma pack(push, 1)
+
+struct vec2_t_pc
+{
+	float x;
+	float y;
+};
+
+struct vec4_t_pc
+{
+	float r;
+	float g;
+	float b;
+	float a;
+};
+
+static_assert(sizeof(vec2_t_pc) == 0x08);
+static_assert(sizeof(vec4_t_pc) == 0x10);
+
+// Shared 0x5C-byte base used by both layers and groups.
+struct CompositeEmblemTransform_PC
+{
+	std::int16_t materialID;              // 0x00, DDL materialID - 1
+	std::uint8_t pad_02[2];              // 0x02
+
+	vec4_t_pc color;                     // 0x04, red/green/blue/alpha
+	vec4_t_pc color1;                    // 0x14, red1/green1/blue1/alpha1
+
+	std::uint32_t gradientType;          // 0x24
+	float gradientAngle;                 // 0x28
+	float gradientFill;                  // 0x2C
+
+	vec2_t_pc pos;                       // 0x30, posx/posy
+	vec2_t_pc scale;                     // 0x38, scalex/scaley
+	float angle;                         // 0x40
+
+	vec2_t_pc materialScale;             // 0x44, materialscalex/materialscaley
+	vec2_t_pc materialPos;               // 0x4C, material pos/offset
+	float materialAngle;                 // 0x54
+
+	std::uint8_t outline;                // 0x58
+	std::uint8_t flip;                   // 0x59
+	std::uint8_t blend;                  // 0x5A
+	std::uint8_t coupledMaterialScale;   // 0x5B
+};
+
+static_assert(sizeof(CompositeEmblemTransform_PC) == 0x5C);
+
+struct CompositeEmblemLayer_PC : CompositeEmblemTransform_PC
+{
+	std::int16_t icon;                   // 0x5C, DDL icon - 1
+	std::int8_t groupIndex;              // 0x5E, DDL groupIndex - 1
+	std::uint8_t pad_5F;                 // 0x5F
+};
+
+static_assert(sizeof(CompositeEmblemLayer_PC) == 0x60);
+static_assert(offsetof(CompositeEmblemLayer_PC, materialID) == 0x00);
+static_assert(offsetof(CompositeEmblemLayer_PC, color) == 0x04);
+static_assert(offsetof(CompositeEmblemLayer_PC, color1) == 0x14);
+static_assert(offsetof(CompositeEmblemLayer_PC, gradientType) == 0x24);
+static_assert(offsetof(CompositeEmblemLayer_PC, gradientAngle) == 0x28);
+static_assert(offsetof(CompositeEmblemLayer_PC, gradientFill) == 0x2C);
+static_assert(offsetof(CompositeEmblemLayer_PC, pos) == 0x30);
+static_assert(offsetof(CompositeEmblemLayer_PC, scale) == 0x38);
+static_assert(offsetof(CompositeEmblemLayer_PC, angle) == 0x40);
+static_assert(offsetof(CompositeEmblemLayer_PC, materialScale) == 0x44);
+static_assert(offsetof(CompositeEmblemLayer_PC, materialPos) == 0x4C);
+static_assert(offsetof(CompositeEmblemLayer_PC, materialAngle) == 0x54);
+static_assert(offsetof(CompositeEmblemLayer_PC, outline) == 0x58);
+static_assert(offsetof(CompositeEmblemLayer_PC, flip) == 0x59);
+static_assert(offsetof(CompositeEmblemLayer_PC, blend) == 0x5A);
+static_assert(offsetof(CompositeEmblemLayer_PC, coupledMaterialScale) == 0x5B);
+static_assert(offsetof(CompositeEmblemLayer_PC, icon) == 0x5C);
+static_assert(offsetof(CompositeEmblemLayer_PC, groupIndex) == 0x5E);
+
+struct CompositeEmblemGroup_PC : CompositeEmblemTransform_PC
+{
+	std::uint8_t isGrouped;              // 0x5C
+	std::uint8_t groupedMaterial;        // 0x5D, 
+	std::uint8_t pad_5E[2];              // 0x5E
+};
+
+static_assert(sizeof(CompositeEmblemGroup_PC) == 0x60);
+static_assert(offsetof(CompositeEmblemGroup_PC, isGrouped) == 0x5C);
+static_assert(offsetof(CompositeEmblemGroup_PC, groupedMaterial) == 0x5D);
+
+struct CompositeEmblem_PC
+{
+	CompositeEmblemLayer_PC layers[64];  // 0x0000 - 0x17FF
+	CompositeEmblemGroup_PC groups[11];  // 0x1800 - 0x1C1F
+
+	std::int32_t weaponIndex;            // 0x1C20, paintshop uses this, emblems usually 0
+	std::int32_t side;                   // 0x1C24, paintshop side, emblems usually INVALID
+	std::int32_t gridSize;               // 0x1C28
+
+	vec4_t_pc highlightColor;            // 0x1C2C
+
+	std::int8_t highlightLayer;          // 0x1C3C, -1 when none
+	std::int8_t highlightGroup;          // 0x1C3D, -1 / 255 when none
+	std::uint8_t highlightBorder;        // 0x1C3E
+	std::uint8_t pad_1C3F[5];            // 0x1C3F - 0x1C43
+};
+
+#pragma pack(pop)
+
+static_assert(sizeof(CompositeEmblem_PC) == 0x1C44);
+static_assert(offsetof(CompositeEmblem_PC, layers) == 0x0000);
+static_assert(offsetof(CompositeEmblem_PC, groups) == 0x1800);
+static_assert(offsetof(CompositeEmblem_PC, weaponIndex) == 0x1C20);
+static_assert(offsetof(CompositeEmblem_PC, side) == 0x1C24);
+static_assert(offsetof(CompositeEmblem_PC, gridSize) == 0x1C28);
+static_assert(offsetof(CompositeEmblem_PC, highlightColor) == 0x1C2C);
+static_assert(offsetof(CompositeEmblem_PC, highlightLayer) == 0x1C3C);
+static_assert(offsetof(CompositeEmblem_PC, highlightGroup) == 0x1C3D);
+static_assert(offsetof(CompositeEmblem_PC, highlightBorder) == 0x1C3E);
+
+*/
