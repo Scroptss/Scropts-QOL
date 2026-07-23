@@ -3,17 +3,42 @@
 #include <sstream>
 #include <vector>
 #include "host.h"
+#include "servers.h"
+#include "players.h"
+#include <d3dcompiler.h>
+#pragma comment(lib, "d3dcompiler.lib")
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-LPVOID oPresent;
-HWND window = NULL;
-WNDPROC oWndProc;
-ID3D11Device* pDevice = NULL;
-ID3D11DeviceContext* pContext = NULL;
-ID3D11RenderTargetView* mainRenderTargetView;
 UINT OpenKeybind = VK_F5;
 int selectedBind = 4;
+
+using Present_t = HRESULT(__stdcall*)(IDXGISwapChain*, UINT, UINT);
+using ResizeBuffers_t = HRESULT(__stdcall*)(
+	IDXGISwapChain*,
+	UINT,
+	UINT,
+	UINT,
+	DXGI_FORMAT,
+	UINT
+	);
+
+Present_t oPresent = nullptr;
+ResizeBuffers_t oResizeBuffers = nullptr;
+
+ID3D11Device* pDevice = nullptr;
+ID3D11DeviceContext* pContext = nullptr;
+inline ID3D11PixelShader* g_emblemMaskPixelShader = nullptr;
+ID3D11RenderTargetView* mainRenderTargetView = nullptr;
+
+IDXGISwapChain* gSwapChain = nullptr;
+HWND window = nullptr;
+WNDPROC oWndProc = nullptr;
+
+bool init = false;
+bool renderTargetReady = false;
+
+
 
 typedef unsigned __int64 ull;
 typedef ull             uint64;
@@ -24,9 +49,11 @@ bool bNotifications = true;
 bool bForceHost;
 bool bForceHostRan;
 bool bFirstGumRan;
-bool open = true;
+
 bool bClassEditor;
 bool bDivinium;
+bool bBurnDupes;
+bool bBurnGum;
 bool bLoginReward = true;
 bool bDiviniumSpend;
 bool bCrypto;
@@ -35,12 +62,16 @@ bool bProtectStats;
 bool bProtectStatsRan;
 bool bCompleteEE;
 bool bArena;
-bool bController;
 int UnlockTMR = clock();
 std::string sPackName;
+std::string sEmblemName;
+bool customImportRename;
+std::string customImportName;
+std::string EmblemRename;
+
 
 int minRank = 0;
-static int iCryptoAmt = 1500;
+static int iCryptoAmt = 48;
 static int icon = 0;
 static int rankXp = 0;
 static int pLevel = 0;
@@ -112,7 +143,6 @@ bool should_ignore_msg(UINT msg)
 	case WM_LBUTTONDOWN:
 	case WM_LBUTTONUP:
 	case WM_LBUTTONDBLCLK:
-	case WM_SETCURSOR:
 		return true;
 	default:
 		return false;
@@ -174,8 +204,6 @@ void InitImGui()
 
 
 	io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
-	//io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
-	io.BackendFlags |= ImGuiBackendFlags_HasGamepad;  
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableSetMousePos;
 	io.Fonts->AddFontFromMemoryTTF(CustomFont, 1, 16);
 	ImGui_ImplWin32_Init(window);
@@ -753,7 +781,42 @@ void UnlockAllAchievements() {
 }
 
 
-// Campaign 
+// Campaign
+
+struct MissionWithAccolades_Raw
+{
+	const char* rootMapName;        // 0x00
+	uint8_t numAccolades;           // 0x08
+	uint8_t pad_09[0x17];           // 0x09
+	uint8_t accoladeIndices[0x10];  // 0x20 maybe
+};
+
+void DumpMissionAccoladeTable()
+{
+	auto table = reinterpret_cast<uint8_t*>(OFFSET(0x41DA710));
+
+	for (int i = 0; i < 0x80; i++)
+	{
+		auto entry = table + (i * 0x30);
+
+		auto rootMapName = *reinterpret_cast<const char**>(entry + 0x00);
+		if (!rootMapName)
+			continue;
+
+		auto num = *reinterpret_cast<uint8_t*>(entry + 0x08);
+
+		utils::write_Debug("Mission[%d] rootMapName=%s numAccolades=%u", i, rootMapName, num);
+
+		for (int j = 0; j < num; j++)
+		{
+			auto idx_20 = *reinterpret_cast<uint8_t*>(entry + 0x20 + j);
+			auto idx_10 = *reinterpret_cast<uint8_t*>(entry + 0x10 + j);
+			auto idx_18 = *reinterpret_cast<uint8_t*>(entry + 0x18 + j);
+
+			utils::write_Debug("  j=%d idx+10=%u idx+18=%u idx+20=%u", j, idx_10, idx_18, idx_20);
+		}
+	}
+}
 
 void UnlockAllMedals() {
 	using namespace std;
@@ -800,6 +863,10 @@ void UnlockAllAccolades() {
 			DDL_MoveToPath(tmp, result, 5, path);
 			DDL_SetUInt((__int64)result, a1, 9999999);
 			ZeroMemory(result, size(result));
+			path[4] = "highestValue";
+			DDL_MoveToPath(tmp, result, 5, path);
+			DDL_SetUInt((__int64)result, a1, 9999999);
+			ZeroMemory(result, size(result));
 		}
 	}
 	LiveStorage_UploadStatsForController(0);
@@ -836,28 +903,81 @@ void UnlockAllCollectibles() {
 }
 
 void CompleteAllMissions() {
+	// completedDifficulties
 	using namespace std;
 
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	auto a1 = GetStatsBuffer(0);
-	path[0] = "PlayerStatsByMap";
 	
 	char result[2000];
 
 	for (int i = 0; i < 11; i++) {
+		path[0] = "PlayerStatsByMap";
 		path[1] = cpmapnames[i];
 		path[2] = "hasBeenCompleted";
 		DDL_MoveToPath(tmp, result, 3, path);
 		DDL_SetUInt((__int64)result, a1, 1);
 		ZeroMemory(result, size(result));
-		path[2] = "score";
-		DDL_MoveToPath(tmp, result, 3, path);
+		
+		for (int d = 0; d < 4; d++)
+		{
+			auto diff = std::to_string(d);
+			path[0] = "PlayerStatsByMap";
+			path[1] = cpmapnames[i];
+			path[2] = "completedDifficulties";
+			path[3] = diff.c_str();
+
+			if (DDL_MoveToPath(tmp, result, 4, path))
+				DDL_SetUInt((__int64)result, a1, 1);
+
+			ZeroMemory(result, sizeof(result));
+		}
+
+		// PlayerLevelStats/<index>/bestPlaythrough/levelScore
+
+		path[0] = "PlayerLevelStats";
+		path[1] = levels[i];
+		path[2] = "bestPlaythrough";
+		path[3] = "levelScore";
+		DDL_MoveToPath(tmp, result, 4, path);
 		DDL_SetUInt((__int64)result, a1, 99999999);
 		ZeroMemory(result, size(result));
+
+		path[0] = "PlayerLevelStats";
+		path[1] = levels[i];
+		path[2] = "HighestDifficulty";
+		DDL_MoveToPath(tmp, result, 3, path);
+		DDL_SetUInt((__int64)result, a1, 3);
+		ZeroMemory(result, size(result));
+
+		path[0] = "PlayerLevelStats";
+		path[1] = levels[i];
+		path[2] = "challengesComplete";
+		DDL_MoveToPath(tmp, result, 3, path);
+		DDL_SetUInt((__int64)result, a1, 10);
+		ZeroMemory(result, size(result));
+
 	}
 	LiveStorage_UploadStatsForController(0);
 
+}
+
+void UnlockAllMusic() {
+	using namespace std;
+	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
+	const char* path[8];
+	auto a1 = GetStatsBuffer(0);
+	char result[2000];
+
+	for (int i = 0; i < 32; i++) {		
+		path[0] = "musicUnlocks";
+		path[1] = intToConstCharPtr(i);
+		DDL_MoveToPath(tmp, result, 2, path);
+		DDL_SetUInt((__int64)result, a1, 1);
+		ZeroMemory(result, size(result));
+	}
+	LiveStorage_UploadStatsForController(0);
 }
 
 // Arena 
@@ -920,14 +1040,12 @@ void setGroupStats() {
 	__int64 DDLContext = GetStatsBuffer(0);
 	char toState[2000]{};
 
-	// The categories/groups you provided
 	const char* groups[] = {
 		"weapon_grenade", "weapon_pistol", "weapon_smg", "weapon_assault",
 		"weapon_lmg", "weapon_cqb", "weapon_sniper", "weapon_launcher",
 		"weapon_knife", "killstreak"
 	};
 
-	// The specific challenge keys you provided
 	const char* challenges[] = {
 		"used", "headshots", "longshot_kill", "noAttKills", "noPerkKills",
 		"multikill_2", "killstreak_5", "challenges", "kill_enemy_one_bullet_shotgun",
@@ -948,14 +1066,12 @@ void setGroupStats() {
 		for (const char* challenge : challenges) {
 			path[3] = challenge;
 
-			// 1. Set the Stat Value (The actual number achieved)
 			path[4] = "statValue";
 			if (DDL_MoveToPath(RootState, toState, 5, path)) {
 				DDL_SetUInt((__int64)toState, DDLContext, 999999);
 			}
 			ZeroMemory(toState, sizeof(toState));
 
-			// 2. Set the Challenge Value (Progress toward completion)
 			path[4] = "challengeValue";
 			if (DDL_MoveToPath(RootState, toState, 5, path)) {
 				DDL_SetUInt((__int64)toState, DDLContext, 999999);
@@ -987,7 +1103,6 @@ void SetValue(__int64 root, __int64 ctx, char* toState, const std::initializer_l
 	}
 }
 
-// 1. Pass by reference (&) to avoid making a copy of the vector
 void GetValue(const std::vector<std::string>& path) {
 	auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
 	auto ctx = GetStatsBuffer(0);
@@ -995,21 +1110,15 @@ void GetValue(const std::vector<std::string>& path) {
 	const char* arr[8];
 	int depth = 0;
 
-	// 2. Iterate by reference (const auto& p) 
-	// This ensures p.c_str() points to the strings living in the 'parts' vector 
-	// inside your Button function, which stays alive until GetValue returns.
 	for (const auto& p : path) {
 		if (depth < 8) {
 			arr[depth++] = p.c_str();
 		}
 	}
-
-	// Now arr[0], arr[1], etc., point to valid memory
 	ImGui::InsertNotification({ ImGuiToastType::None, 2000, "%s %s %s", arr[0], arr[1], arr[2] });
 
 	if (DDL_MoveToPath(root, toState, depth, arr)) {
 		lastIntResult = DDL_GetUInt((__int64)toState, ctx);
-		// Note: ZeroMemory isn't strictly necessary if toState is local, but doesn't hurt.
 		ZeroMemory(toState, 2000);
 	}
 }
@@ -1065,7 +1174,6 @@ void SetChallengeValue(
 	if (!category || !category[0] || !stat || !stat[0])
 		return;
 
-	// playerstatslist.<stat>.challengeValue
 	if (!_stricmp(category, "global"))
 	{
 		SetUIntPath(root, ctx,
@@ -1078,7 +1186,6 @@ void SetChallengeValue(
 		return;
 	}
 
-	// groupstats.<object>.stats.<stat>.challengeValue
 	if (!_stricmp(category, "group"))
 	{
 		SetUIntPath(root, ctx,
@@ -1093,7 +1200,6 @@ void SetChallengeValue(
 		return;
 	}
 
-	// PlayerStatsByGameType.<object>.<stat>.challengeValue
 	if (!_stricmp(category, "gamemode"))
 	{
 		SetUIntPath(root, ctx,
@@ -1107,9 +1213,8 @@ void SetChallengeValue(
 		return;
 	}
 
-	// itemstats.<index>.stats.<stat>.challengeValue
-	/*if (!_stricmp(category, "item") || !_stricmp(category, "weapon"))
-	{
+	if (!_stricmp(category, "item") || !_stricmp(category, "weapon"))
+	/*{
 		uint32_t itemIndex = GetItemIndexFromStatTable(object);
 
 		SetUIntPath(root, ctx,
@@ -1124,7 +1229,6 @@ void SetChallengeValue(
 		return;
 	}*/
 
-	// attachments.<object>.stats.<stat>.challengeValue
 	if (!_stricmp(category, "attachment"))
 	{
 		SetUIntPath(root, ctx,
@@ -1139,7 +1243,6 @@ void SetChallengeValue(
 		return;
 	}
 
-	// specialiststats.<index>.stats.<stat>.challengeValue
 	if (!_stricmp(category, "specialist") || !_stricmp(category, "hero"))
 	{
 		uint32_t specialistIndex = GetSpecialistIndex(object);
@@ -1189,7 +1292,6 @@ void UnlockMilestoneTable(
 
 		uint32_t value = std::strtoul(valueStr, nullptr, 10);
 
-		// Some rows target multiple objects separated by spaces.
 		std::vector<std::string> splitObjects = split(objects ? objects : "", ' ');
 
 		if (splitObjects.empty())
@@ -1213,7 +1315,6 @@ void setGameTypeStats() {
 	auto ctx = GetStatsBuffer(0);
 	char toState[2000]{};
 
-	// List of gamemodes provided
 	const char* gameModes[] = {
 		"ball", "conf", "ctf", "dem", "dm", "dom", "escort", "gun",
 		"hcconf", "hcctf", "hcdem", "hcdm", "hcdom", "hchq", "hckoth",
@@ -1331,7 +1432,6 @@ void SetWeaponStats(int weaponIndex)
 
 	std::vector<const char*> base = { "itemstats", intToConstCharPtr(weaponIndex) };
 
-	// Core stats
 	SetValue(root, ctx, toState, { base[0], base[1], "purchased" }, g_WeaponStats.purchased);
 	SetValue(root, ctx, toState, { base[0], base[1], "xp" }, g_WeaponStats.xp);
 	SetValue(root, ctx, toState, { base[0], base[1], "plevel" }, g_WeaponStats.plevel);
@@ -1339,7 +1439,6 @@ void SetWeaponStats(int weaponIndex)
 	for (int i = 0; i < 3; i++)
 		SetValue(root, ctx, toState, { base[0], base[1], "isproversionunlocked" }, g_WeaponStats.purchased);
 
-	// Core tracked stats
 	auto setStat = [&](const char* name, int statVal, int chalVal)
 		{
 			SetValue(root, ctx, toState, { base[0], base[1], "stats", name, "statValue" }, statVal);
@@ -1383,8 +1482,6 @@ void SetWeaponStats(int weaponIndex)
 	setStat("destroy_explosive_with_trophy", g_WeaponStats.projectiles, 1);
 	setStat("challenges_tu", g_WeaponStats.challenges_tu, 1);
 
-
-	// Challenge progression
 	for (int i = 0; i < 8; i++)
 	{
 		char buf[32];
@@ -1592,6 +1689,41 @@ void unlockSpecialistOutfits() {
 	}
 }
 
+static int GetParagonBaseForMode(int mode)
+{
+	switch (mode)
+	{
+	case MODE_MULTIPLAYER:
+		return 56; 
+
+	case MODE_ZOMBIES:
+		return 36; 
+
+	default:
+		return 0;
+	}
+}
+
+static int VisibleParagonToStored(int mode, int visibleLevel)
+{
+	const int base = GetParagonBaseForMode(mode);
+
+	if (base <= 0)
+		return 0;
+
+	return visibleLevel - base;
+}
+
+static int StoredParagonToVisible(int mode, int storedRank)
+{
+	const int base = GetParagonBaseForMode(mode);
+
+	if (base <= 0)
+		return storedRank;
+
+	return storedRank + base;
+}
+
 void setPrestige(int rank) {
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
@@ -1647,21 +1779,24 @@ void setpLevelXP(int rank) {
 	ZeroMemory(result, sizeof(result));
 }
 
-void setMasterRank(int rank) {
+void setMasterRank(int visibleParagonLevel)
+{
+	const int mode = Com_SessionMode_GetMode();
+
+	const int storedParagonRank = VisibleParagonToStored(mode, visibleParagonLevel);
+
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
-	__int64 a1 = GetStatsBuffer(0);
-	path[0] = "PlayerStatsList";
-	path[2] = "statValue";
-	if (bArena) {
-		path[2] = "arenaValue";
-	}
-	char result[2000];
+	__int64 statsBuffer = GetStatsBuffer(0);
 
+	path[0] = "PlayerStatsList";
 	path[1] = "paragon_rank";
+	path[2] = bArena ? "arenaValue" : "statValue";
+
+	char result[2000]{};
+
 	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, rank - minRank);
-	ZeroMemory(result, sizeof(result));
+	DDL_SetUInt(reinterpret_cast<__int64>(result), statsBuffer, storedParagonRank);
 }
 
 void setMasterXP(int rank) {
@@ -1729,55 +1864,6 @@ arenastats()
 	wait .1;
 	uploadstats(self);
 }*/
-
-void setAllRanks()
-{
-
-
-	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
-	const char* path[8];
-	__int64 a1 = GetStatsBuffer(0);
-	
-	char result[2000];
-
-	if (bArena) {
-
-		SetValue(tmp, a1, result, { "playerstatslist", "plevel", "arenavalue"}, 55);
-		SetValue(tmp, a1, result, { "playerstatslist", "rank", "arenavalue" }, 55);
-		SetValue(tmp, a1, result, { "playerstatslist", "rankxp", "arenavalue" }, 1000000);
-		return;
-	}
-	
-
-	path[0] = "PlayerStatsList";
-	path[2] = "statValue";
-
-	path[1] = "plevel";
-	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, pPrestige);
-	ZeroMemory(result, sizeof(result));
-
-	path[1] = "rank";
-	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, pLevel);
-	ZeroMemory(result, sizeof(result));
-
-	path[1] = "rankxp";
-	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, rankXp);
-	ZeroMemory(result, sizeof(result));
-
-	path[1] = "paragon_rankxp";
-	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, paragonRankXp);
-	ZeroMemory(result, sizeof(result));
-
-	path[1] = "paragon_rank";
-	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, ParagonRank - minRank);
-	ZeroMemory(result, sizeof(result));
-	
-}
 
 void setStats() {
 
@@ -2016,7 +2102,6 @@ void completeDailyChallenges()
 
 	int rowCount = table->rowCount;
 
-	// rowcount is 43, starts at 2
 	for (int row = 2; row < rowCount; row++)
 	{
 		const char* challengeName = StringTable_GetColumnValueForRow(table, row, 4);
@@ -2167,7 +2252,6 @@ void unlockContracts(int start, int end, int type)
 		if (DDL_MoveToPath(root, state, 3, path))
 			DDL_SetUInt((__int64)state, ctx, 1);
 
-		// Column 9: "extraBools 3" / "extraBytes 14"
 		if (extraPath && extraPath[0])
 		{
 			auto parts = split(extraPath, ' ');
@@ -2184,9 +2268,6 @@ void unlockContracts(int start, int end, int type)
 					DDL_SetUInt((__int64)state, ctx, 1);
 				}*/
 
-				// If your DDL_MoveToPath only supports const char** paths,
-				// use this instead:
-				//
 				 std::string extraIndexStr = std::to_string(extraIndex);
 				 extraDDLPath[1] = extraIndexStr.c_str();
 				
@@ -2758,6 +2839,2590 @@ const int tabCount = 9;
 
 bool jumped = false;
 
+std::filesystem::path MakeUniquePath(const std::filesystem::path& desiredPath)
+{
+	if (!std::filesystem::exists(desiredPath))
+		return desiredPath;
+
+	const auto parent = desiredPath.parent_path();
+	const auto stem = desiredPath.stem().string();
+	const auto extension = desiredPath.extension().string();
+
+	for (int i = 1; i < 10000; ++i)
+	{
+		std::filesystem::path candidate =
+			parent / (stem + " (" + std::to_string(i) + ")" + extension);
+
+		if (!std::filesystem::exists(candidate))
+			return candidate;
+	}
+
+	const auto timestamp =
+		std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+
+	return parent / (stem + "_" + timestamp + extension);
+}
+
+static void ClampInt(int& value, int minValue, int maxValue)
+{
+	if (value < minValue)
+		value = minValue;
+
+	if (value > maxValue)
+		value = maxValue;
+}
+
+static bool InputIntClamped(const char* label, int* value, int minValue, int maxValue)
+{
+	const bool changed = ImGui::InputInt(label, value);
+
+	ClampInt(*value, minValue, maxValue);
+
+	return changed;
+}
+
+static int StringToIntSafe(const char* value, int fallback = 0)
+{
+	if (!value || !*value)
+		return fallback;
+
+	return atoi(value);
+}
+
+static StringTable* GetRankTableForMode(int mode)
+{
+	StringTable* table = nullptr;
+
+	if (mode == MODE_CAMPAIGN) {
+		StringTable_GetAsset("gamedata/tables/cp/cp_ranktable.csv", &table);
+	}
+	else if (mode == MODE_MULTIPLAYER) {
+		StringTable_GetAsset("gamedata/tables/mp/mp_ranktable.csv", &table);
+	}
+	else if (mode == MODE_ZOMBIES) {
+		StringTable_GetAsset("gamedata/tables/zm/zm_ranktable.csv", &table);
+	}
+
+	return table;
+}
+
+static StringTable* GetParagonRankTableForMode(int mode)
+{
+	StringTable* table = nullptr;
+
+	if (mode == MODE_MULTIPLAYER) {
+		StringTable_GetAsset("gamedata/tables/mp/mp_paragonranktable.csv", &table);
+	}
+	else if (mode == MODE_ZOMBIES) {
+		StringTable_GetAsset("gamedata/tables/zm/zm_paragonranktable.csv", &table);
+	}
+
+	return table;
+}
+
+static StringTable* GetRankIconTableForMode(int mode)
+{
+	StringTable* table = nullptr;
+
+	if (mode == MODE_CAMPAIGN) {
+		StringTable_GetAsset("gamedata/tables/cp/cp_rankicontable.csv", &table);
+	}
+	else if (mode == MODE_MULTIPLAYER) {
+		StringTable_GetAsset("gamedata/tables/mp/mp_paragonrankicontable.csv", &table);
+	}
+	else if (mode == MODE_ZOMBIES) {
+		StringTable_GetAsset("gamedata/tables/zm/zm_paragonrankicontable.csv", &table);
+	}
+
+	return table;
+}
+
+static bool RankIconExistsForMode(int mode, int icon)
+{
+	StringTable* table = GetRankIconTableForMode(mode);
+	if (!table)
+		return false;
+
+	char lookup[16]{};
+	sprintf_s(lookup, "%d", icon);
+
+	const char* result = StringTable_Lookup(table, 0, lookup, 0);
+
+	return result && *result;
+}
+
+static int GetRankXPFromTable(int mode, int level)
+{
+	StringTable* table = GetRankTableForMode(mode);
+	if (!table)
+		return 0;
+
+	char lookup[16]{};
+	sprintf_s(lookup, "%d", level);
+
+	const char* xpValue = StringTable_Lookup(table, 0, lookup, 7);
+
+	return StringToIntSafe(xpValue, 0);
+}
+
+static int GetParagonXPFromTable(int mode, int visibleParagonLevel)
+{
+	StringTable* table = GetParagonRankTableForMode(mode);
+	if (!table)
+		return 0;
+
+	char lookup[16]{};
+	sprintf_s(lookup, "%d", visibleParagonLevel);
+
+	const char* xpValue = StringTable_Lookup(table, 13, lookup, 2);
+
+	return StringToIntSafe(xpValue, 0);
+}
+
+static void UpdateRankXPFromInputs(int mode, int level, int paragonRank, int& rankXp, int& paragonRankXp)
+{
+	rankXp = GetRankXPFromTable(mode, level);
+
+	if (mode == MODE_CAMPAIGN) {
+		paragonRankXp = 0;
+	}
+	else {
+		paragonRankXp = GetParagonXPFromTable(mode, paragonRank);
+	}
+}
+
+static int GetParagonInternalRankFromTable(int mode, int visibleParagonRank)
+{
+	StringTable* table = GetParagonRankTableForMode(mode);
+	if (!table)
+		return visibleParagonRank - minRank;
+
+	char lookup[16]{};
+	sprintf_s(lookup, "%d", visibleParagonRank);
+
+	const char* internalValue = StringTable_Lookup(table, 13, lookup, 0);
+
+	return StringToIntSafe(internalValue, visibleParagonRank - minRank);
+}
+
+static void SetDDLUInt(const char* statName, int value)
+{
+	auto root = LiveStats_Core_GetRootDDLState(GetSessionState());
+	auto statsBuffer = GetStatsBuffer(0);
+
+	const char* path[3]{};
+	path[0] = "PlayerStatsList";
+	path[1] = statName;
+	path[2] = bArena ? "arenaValue" : "statValue";
+
+	char result[2000]{};
+
+	DDL_MoveToPath(root, result, 3, path);
+	DDL_SetUInt(reinterpret_cast<__int64>(result), statsBuffer, value);
+}
+
+void setAllRanks()
+{
+	const int mode = Com_SessionMode_GetMode();
+
+	ClampInt(pPrestige, 0, 11);
+
+	if (mode == MODE_MULTIPLAYER)
+		ClampInt(pLevel, 0, 54);
+	else if (mode == MODE_ZOMBIES)
+		ClampInt(pLevel, 0, 34);
+	else if (mode == MODE_CAMPAIGN)
+		ClampInt(pLevel, 0, 19);
+
+	ClampInt(ParagonRank, minRank, 1000);
+
+	rankXp = GetRankXPFromTable(mode, pLevel);
+
+	if (mode == MODE_CAMPAIGN) {
+		paragonRankXp = 0;
+	}
+	else {
+		paragonRankXp = GetParagonXPFromTable(mode, ParagonRank);
+	}
+
+	const int internalParagonRank =
+		mode == MODE_CAMPAIGN
+		? 0
+		: GetParagonInternalRankFromTable(mode, ParagonRank);
+
+	SetDDLUInt("plevel", pPrestige);
+	SetDDLUInt("rank", pLevel);
+	SetDDLUInt("rankxp", rankXp);
+
+	if (mode != MODE_CAMPAIGN) {
+		SetDDLUInt("paragon_rank", internalParagonRank);
+		SetDDLUInt("paragon_rankxp", paragonRankXp);
+	}
+
+	LiveStorage_UploadStatsForController(0);
+}
+
+
+#pragma pack(push, 1)
+
+struct EmblemFileHeader
+{
+	char magic[8];              // "T7EMBLM"
+	uint32_t version;           // 1
+	uint32_t emblemSize;        // sizeof(DumpCompositeEmblem)
+	uint32_t nameLength;        // bytes, no null terminator
+	uint32_t crc32;             // CRC over name bytes + emblem bytes
+};
+
+#pragma pack(pop)
+
+static_assert(sizeof(EmblemFileHeader) == 0x18);
+
+constexpr char T7_EMBLEM_MAGIC[8] = { 'T', '7', 'E', 'M', 'B', 'L', 'M', '\0' };
+constexpr uint32_t T7_EMBLEM_VERSION = 1;
+
+inline uint32_t Crc32Update(uint32_t crc, const void* data, size_t size)
+{
+	const auto* bytes = static_cast<const uint8_t*>(data);
+
+	crc = ~crc;
+
+	for (size_t i = 0; i < size; ++i)
+	{
+		crc ^= bytes[i];
+
+		for (int bit = 0; bit < 8; ++bit)
+		{
+			const uint32_t mask = 0u - (crc & 1u);
+			crc = (crc >> 1) ^ (0xEDB88320u & mask);
+		}
+	}
+
+	return ~crc;
+}
+
+inline uint32_t Crc32(const void* data, size_t size)
+{
+	return Crc32Update(0, data, size);
+}
+
+inline uint32_t Crc32EmblemPayload(std::string_view name, const CompositeEmblem& emblem)
+{
+	uint32_t crc = 0;
+
+	crc = Crc32Update(crc, name.data(), name.size());
+	crc = Crc32Update(crc, &emblem, sizeof(emblem));
+
+	return crc;
+}
+
+inline std::string SanitizeFileName(std::string name)
+{
+	if (name.empty())
+		name = "Unnamed";
+
+	for (char& c : name)
+	{
+		switch (c)
+		{
+		case '<':
+		case '>':
+		case ':':
+		case '"':
+		case '/':
+		case '\\':
+		case '|':
+		case '?':
+		case '*':
+			c = '_';
+			break;
+		default:
+			break;
+		}
+	}
+
+	while (!name.empty() && (name.back() == ' ' || name.back() == '.'))
+		name.pop_back();
+
+	if (name.empty())
+		name = "Unnamed";
+
+	return name;
+}
+
+bool WriteEmblemFile(
+	const std::filesystem::path& outPath,
+	std::string_view emblemName,
+	const CompositeEmblem& emblem)
+{
+	std::filesystem::path finalPath = outPath;
+
+	if (finalPath.extension() != ".emblem")
+	{
+		const std::string safeName = SanitizeFileName(std::string(emblemName));
+		finalPath /= safeName + ".emblem";
+	}
+
+	const auto parent = finalPath.parent_path();
+
+	if (!parent.empty())
+	{
+		std::error_code ec;
+		std::filesystem::create_directories(parent, ec);
+
+		if (ec)
+			return false;
+	}
+
+	finalPath = MakeUniquePath(finalPath);
+
+	std::string storedName(emblemName);
+
+	if (storedName.empty())
+		storedName = finalPath.stem().string();
+
+	if (storedName.size() > 255)
+		storedName.resize(255);
+
+	EmblemFileHeader header{};
+	std::memcpy(header.magic, T7_EMBLEM_MAGIC, sizeof(header.magic));
+	header.version = T7_EMBLEM_VERSION;
+	header.emblemSize = static_cast<uint32_t>(sizeof(CompositeEmblem));
+	header.nameLength = static_cast<uint32_t>(storedName.size());
+	header.crc32 = Crc32EmblemPayload(storedName, emblem);
+
+	std::ofstream file(finalPath, std::ios::binary | std::ios::trunc);
+
+	if (!file)
+		return false;
+
+	file.write(reinterpret_cast<const char*>(&header), sizeof(header));
+
+	if (!storedName.empty())
+		file.write(storedName.data(), static_cast<std::streamsize>(storedName.size()));
+
+	file.write(reinterpret_cast<const char*>(&emblem), sizeof(emblem));
+
+	return file.good();
+}
+
+void InitDDLState(DDLState& state)
+{
+	std::memset(&state, 0, sizeof(state));
+	state.arrayIndex = -1;
+}
+
+int GetEmblemInt(
+	DDLState* root,
+	DDLContext* ctx,
+	int slot,
+	const char* field,
+	int fallback = 0)
+{
+	if (!root || !ctx || slot < 0 || slot >= 32 || !field)
+		return fallback;
+
+	DDLState state{};
+	InitDDLState(state);
+
+	const char* path[8]{};
+	path[0] = "emblemList";
+	path[1] = intToConstCharPtr(slot);
+	path[2] = field;
+
+	if (!DDL_MoveToPath((__int64)root, (char*)&state, 3, path))
+		return fallback;
+
+	return DDL_GetUInt((__int64)&state, (__int64)ctx);
+}
+
+bool SetEmblemInt(
+	DDLState* root,
+	DDLContext* ctx,
+	int slot,
+	const char* field,
+	int value)
+{
+	DDLState state{};
+	InitDDLState(state);
+	const char* path[8];
+	path[0] = "emblemList";
+	path[1] = intToConstCharPtr(slot);
+	path[2] = field;
+
+	if (!DDL_MoveToPath((__int64)root, (char*) & state, 3, path))
+		return false;
+
+	DDL_SetInt((__int64) & state, (__int64)ctx, value);
+	return true;
+}
+
+bool SetEmblemString(
+	DDLState* root,
+	DDLContext* ctx,
+	int slot,
+	const char* field,
+	const char* value)
+{
+	DDLState state{};
+	InitDDLState(state);
+	const char* path[8];
+	path[0] = "emblemList";
+	path[1] = intToConstCharPtr(slot);
+	path[2] = field;
+
+	if (!DDL_MoveToPath((__int64)root, (char*)&state, 3, path))
+		return false;
+
+	DDL_SetString((__int64) & state, (__int64)ctx, value);
+	return true;
+}
+
+bool RenameEmblem(int slot, std::string emblemName)
+{
+	DDLContext* ddlCtx = Storage_GetDDLContext(0, 26, 0);
+	DDLState* rootState = Storage_GetDDLRootState(26);
+
+	return SetEmblemString(rootState, ddlCtx, slot, "emblemName", emblemName.c_str());
+}
+
+std::string GetEmblemString(
+	DDLState* root,
+	DDLContext* ctx,
+	int slot,
+	const char* field)
+{
+	if (!root || !ctx || slot < 0 || slot >= 32 || !field)
+		return {};
+
+	DDLState state{};
+	InitDDLState(state);
+
+	const char* path[8]{};
+	path[0] = "emblemList";
+	path[1] = intToConstCharPtr(slot);
+	path[2] = field;
+
+	if (!DDL_MoveToPath((__int64)root, (char*)&state, 3, path))
+		return {};
+
+	const char* value = DDL_GetString((__int64)&state, (__int64)ctx);
+
+	if (!value)
+		return {};
+
+	return value;
+}
+
+std::string GetEmblemName(int slot)
+{
+
+	constexpr StorageFileType STORAGE_EMBLEMS = static_cast<StorageFileType>(26);
+
+	DDLState* root = Storage_GetDDLRootState(STORAGE_EMBLEMS);
+	DDLContext* ctx = Storage_GetDDLContext(0, STORAGE_EMBLEMS, 0);
+
+	std::string name = GetEmblemString(root, ctx, slot, "emblemName");
+}
+
+int GetHighestEmblemSortIndex(DDLState* root, DDLContext* ctx)
+{
+	int maxSort = 0;
+
+	for (int i = 0; i < 32; ++i)
+	{
+		DDLState state{};
+		InitDDLState(state);
+		const char* path[8];
+		path[0] = "emblemList";
+		path[1] = intToConstCharPtr(i);
+		path[2] = "sortIndex";
+
+		if (DDL_MoveToPath((__int64)root, (char*)&state, 3, path)){
+			const int sort = DDL_GetUInt((__int64) & state, (__int64)ctx);
+			if (sort > maxSort)
+				maxSort = sort;
+		}
+	}
+
+	return maxSort;
+}
+
+inline int GetUsedEmblemLayerCount(const CompositeEmblem& emblem)
+{
+	const auto* raw = reinterpret_cast<const uint8_t*>(&emblem);
+
+	int highestUsed = -1;
+
+	for (int i = 0; i < 64; ++i)
+	{
+		const uint8_t* layer = raw + i * 0x60;
+
+		const int16_t materialID = *reinterpret_cast<const int16_t*>(layer + 0x00);
+		const int16_t icon = *reinterpret_cast<const int16_t*>(layer + 0x5C);
+
+		if (materialID != -1 || icon != -1)
+			highestUsed = i;
+	}
+
+	return highestUsed + 1;
+}
+
+inline bool HasAnyEmblemLayers(const CompositeEmblem& emblem)
+{
+	return GetUsedEmblemLayerCount(emblem) > 0;
+}
+
+std::filesystem::path GetGameDirectory()
+{
+	wchar_t path[MAX_PATH]{};
+
+	const DWORD len = GetModuleFileNameW(nullptr, path, MAX_PATH);
+
+	if (len == 0 || len >= MAX_PATH)
+		return std::filesystem::current_path();
+
+	std::filesystem::path exePath(path);
+	return exePath.parent_path();
+}
+
+std::filesystem::path GetEmblemsDirectory()
+{
+	return GetGameDirectory() / "emblems";
+}
+
+bool IsEmblemSlotUsed(DDLState* root, DDLContext* ctx, int slot)
+{
+	DDLState state{};
+	InitDDLState(state);
+	const char* path[8];
+	path[0] = "emblemList";
+	path[1] = intToConstCharPtr(slot);
+	path[2] = "isUsed";
+
+	if (!DDL_MoveToPath((__int64)root, (char*) & state, 3, path))
+		return true;
+
+	return DDL_GetUInt((__int64) & state, (__int64)ctx) != 0;
+}
+
+struct ReadEmblemFileResult
+{
+	std::string name;
+	CompositeEmblem emblem{};
+};
+
+bool ReadEmblemFile(
+	const std::filesystem::path& path,
+	ReadEmblemFileResult& out)
+{
+	std::ifstream file(path, std::ios::binary);
+
+	if (!file)
+		return false;
+
+	EmblemFileHeader header{};
+	file.read(reinterpret_cast<char*>(&header), sizeof(header));
+
+	if (!file)
+		return false;
+
+	if (std::memcmp(header.magic, T7_EMBLEM_MAGIC, sizeof(header.magic)) != 0)
+		return false;
+
+	if (header.version != T7_EMBLEM_VERSION)
+		return false;
+
+	if (header.emblemSize != sizeof(CompositeEmblem))
+		return false;
+
+	if (header.nameLength > 255)
+		return false;
+
+	std::string name;
+	name.resize(header.nameLength);
+
+	if (header.nameLength > 0)
+		file.read(name.data(), static_cast<std::streamsize>(header.nameLength));
+
+	if (!file)
+		return false;
+
+	CompositeEmblem emblem{};
+	file.read(reinterpret_cast<char*>(&emblem), sizeof(emblem));
+
+	if (!file)
+		return false;
+
+	const uint32_t actualCrc = Crc32EmblemPayload(name, emblem);
+
+	if (actualCrc != header.crc32)
+		return false;
+
+	out.name = std::move(name);
+	out.emblem = emblem;
+
+	return true;
+}
+
+struct EmblemFileEntry
+{
+	std::filesystem::path path;
+	std::string fileName;
+	std::string displayName;
+};
+
+struct EmblemImportBrowser
+{
+	std::vector<EmblemFileEntry> files;
+	int selectedIndex = -1;
+};
+
+static EmblemImportBrowser g_emblemImportBrowser;
+
+struct EmblemSlotEntry
+{
+	int slot = -1;
+	int sortIndex = 0;
+	bool isUsed = false;
+
+	std::string name;
+	std::string displayName;
+};
+
+struct EmblemExportBrowser
+{
+	std::vector<EmblemSlotEntry> slots;
+	int selectedIndex = -1;
+	bool showEmptySlots = false;
+};
+
+static EmblemExportBrowser g_emblemExportBrowser;
+
+void RefreshEmblemFileList()
+{
+	g_emblemImportBrowser.files.clear();
+	g_emblemImportBrowser.selectedIndex = -1;
+
+	const auto dir = GetEmblemsDirectory();
+
+	std::error_code ec;
+	std::filesystem::create_directories(dir, ec);
+
+	if (ec)
+		return;
+
+	for (const auto& entry : std::filesystem::directory_iterator(dir, ec))
+	{
+		if (ec)
+			break;
+
+		if (!entry.is_regular_file())
+			continue;
+
+		const auto& path = entry.path();
+
+		if (path.extension() != ".emblem")
+			continue;
+
+		EmblemFileEntry item{};
+		item.path = path;
+		item.fileName = path.filename().string();
+
+		ReadEmblemFileResult preview{};
+
+		if (ReadEmblemFile(path, preview) && !preview.name.empty())
+			item.displayName = preview.name + " (" + item.fileName + ")";
+		else
+			item.displayName = item.fileName + " (invalid)";
+
+		g_emblemImportBrowser.files.push_back(std::move(item));
+	}
+
+	std::sort(
+		g_emblemImportBrowser.files.begin(),
+		g_emblemImportBrowser.files.end(),
+		[](const EmblemFileEntry& a, const EmblemFileEntry& b)
+		{
+			return a.fileName < b.fileName;
+		}
+	);
+
+	if (!g_emblemImportBrowser.files.empty())
+		g_emblemImportBrowser.selectedIndex = 0;
+}
+
+void RefreshEmblemSlotList(ControllerIndex_t controller)
+{
+	g_emblemExportBrowser.slots.clear();
+	g_emblemExportBrowser.selectedIndex = -1;
+
+	constexpr StorageFileType STORAGE_EMBLEMS = static_cast<StorageFileType>(26);
+
+	DDLState* root = Storage_GetDDLRootState(STORAGE_EMBLEMS);
+	DDLContext* ctx = Storage_GetDDLContext(controller, STORAGE_EMBLEMS, 0);
+
+	if (!root || !ctx)
+		return;
+
+	for (int slot = 0; slot < 32; ++slot)
+	{
+		const bool isUsed = IsEmblemSlotUsed(root, ctx, slot);
+
+		if (!g_emblemExportBrowser.showEmptySlots && !isUsed)
+			continue;
+
+		const int sortIndex = GetEmblemInt(root, ctx, slot, "sortIndex", 0);
+
+		std::string name = GetEmblemString(root, ctx, slot, "emblemName");
+
+		if (name.empty())
+			name = "Slot_" + std::to_string(slot);
+
+		EmblemSlotEntry entry{};
+		entry.slot = slot;
+		entry.sortIndex = sortIndex;
+		entry.isUsed = isUsed;
+		entry.name = name;
+
+		char display[256]{};
+		std::snprintf(
+			display,
+			sizeof(display),
+			"%sSlot %02d | %s",
+			isUsed ? "" : "[Empty] ",
+			slot,
+			name.c_str()
+		);
+
+		entry.displayName = display;
+
+		g_emblemExportBrowser.slots.push_back(std::move(entry));
+	}
+
+	std::sort(
+		g_emblemExportBrowser.slots.begin(),
+		g_emblemExportBrowser.slots.end(),
+		[](const EmblemSlotEntry& a, const EmblemSlotEntry& b)
+		{
+			if (a.isUsed != b.isUsed)
+				return a.isUsed > b.isUsed;
+
+			if (a.sortIndex != b.sortIndex)
+				return a.sortIndex < b.sortIndex;
+
+			return a.slot < b.slot;
+		}
+	);
+
+	if (!g_emblemExportBrowser.slots.empty())
+		g_emblemExportBrowser.selectedIndex = 0;
+}
+
+bool ImportEmblemFileBackend(
+	ControllerIndex_t controller,
+	int slot,
+	const std::filesystem::path& filePath,
+	bool allowOverwrite)
+{
+	constexpr StorageFileType STORAGE_EMBLEMS = static_cast<StorageFileType>(26);
+
+	if (slot < 0 || slot >= 32)
+		return false;
+
+	ReadEmblemFileResult imported{};
+
+	if (!ReadEmblemFile(filePath, imported))
+		return false;
+
+	DDLContext* ddlCtx = Storage_GetDDLContext(controller, STORAGE_EMBLEMS, 0);
+	DDLState* rootState = Storage_GetDDLRootState(STORAGE_EMBLEMS);
+
+	if (!ddlCtx || !rootState)
+		return false;
+
+	if (!allowOverwrite && IsEmblemSlotUsed(rootState, ddlCtx, slot))
+		return false;
+
+	const int maxSort = GetHighestEmblemSortIndex(rootState, ddlCtx);
+
+	std::string importName = imported.name;
+
+	if (customImportRename && !customImportName.empty())
+		importName = customImportName;
+
+	if (importName.empty())
+		importName = filePath.stem().string();
+
+	if (importName.size() > 255)
+		importName.resize(255);
+
+	if (!SetEmblemString(rootState, ddlCtx, slot, "emblemName", importName.c_str()))
+		return false;
+
+	if (!SetEmblemInt(rootState, ddlCtx, slot, "isUsed", 1))
+		return false;
+
+	if (!SetEmblemInt(rootState, ddlCtx, slot, "sortIndex", maxSort + 1))
+		return false;
+
+	SetEmblemInt(rootState, ddlCtx, slot, "readOnly", 0);
+
+	DDLState emblemState{};
+	InitDDLState(emblemState);
+
+	const char* path[8]{};
+	path[0] = "emblemList";
+	path[1] = intToConstCharPtr(slot);
+	path[2] = "emblem";
+
+	if (!DDL_MoveToPath((__int64)rootState, (char*)&emblemState, 3, path))
+		return false;
+
+	const int layerCount = 64;
+
+	BG_PaintshopWriteDDL(
+		(__int64)&emblemState,
+		(__int64)ddlCtx,
+		(__int64)&imported.emblem,
+		layerCount
+	);
+
+	return Storage_Write(controller, STORAGE_EMBLEMS, 0);
+}
+
+bool ExportEmblemBackend(
+	ControllerIndex_t controller,
+	int slot,
+	const std::filesystem::path& outPath)
+{
+	constexpr StorageFileType STORAGE_EMBLEMS = static_cast<StorageFileType>(26);
+	constexpr int CUSTOMIZATION_TYPE_EMBLEM = 3;
+
+	if (slot < 0 || slot >= 32)
+		return false;
+
+	CompositeEmblem emblem{};
+	BG_InitCompositeEmblem(&emblem);
+
+	Live_Emblems_GetEmblemData(
+		controller,
+		CUSTOMIZATION_TYPE_EMBLEM,
+		slot,
+		STORAGE_EMBLEMS,
+		&emblem
+	);
+
+	DDLContext* ddlCtx = Storage_GetDDLContext(controller, STORAGE_EMBLEMS, 0);
+	DDLState* rootState = Storage_GetDDLRootState(STORAGE_EMBLEMS);
+
+	const std::string name = GetEmblemString(rootState, ddlCtx, slot, "emblemName");
+
+	return WriteEmblemFile(outPath, name, emblem);
+}
+
+// ---------------------------------- Emblem Renderer ---------------------------------------
+
+namespace EmblemPreview
+{
+	inline constexpr std::uintptr_t COMPOSITE_JOBS_RVA = 0x52CA460;
+
+	inline constexpr std::ptrdiff_t GFXIMAGE_SRV_OFFSET = 0xA8;
+
+	inline constexpr int COMPOSITE_JOB_COUNT = 16;
+	inline constexpr int EMBLEM_LAYER_CAPACITY = 64;
+	inline constexpr std::size_t EMBLEM_LAYER_SIZE = 0x60;
+	inline constexpr std::uint32_t EMBLEM_PREVIEW_FLAGS = 0x40000000u;
+
+	inline std::uint64_t g_nextPreviewAllowedMs = 0;
+	inline constexpr std::uint64_t PREVIEW_SUBMIT_COOLDOWN_MS = 300;
+	inline bool g_wasInGameForPreview = false;
+	inline bool g_didPostMatchPreviewReset = false;
+	inline std::uint64_t g_lobbyStableSinceMs = 0;
+
+	inline CompositeJob* GetCompositeJobs()
+	{
+		return reinterpret_cast<CompositeJob*>(OFFSET(COMPOSITE_JOBS_RVA));
+	}
+
+	inline int FindJobSlotById_NoLock(CompositeJobID id)
+	{
+		if (id == 0)
+			return -1;
+
+		CompositeJob* jobs = GetCompositeJobs();
+
+		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
+		{
+			if (jobs[i].id == id)
+				return i;
+		}
+
+		return -1;
+	}
+
+
+	enum class SourceKind : std::uint8_t
+	{
+		None,
+		BackendSlot,
+		EmblemFile
+	};
+
+	struct PreviewJob
+	{
+		bool active = false;
+		bool ready = false;
+
+		bool cancelRequested = false;
+		bool releaseRequested = false;
+
+		CompositeJobID id = 0;
+		int jobSlot = -1;
+
+		GfxImage* image = nullptr;
+
+		std::uint64_t submitTimeMs = 0;
+		std::uint64_t lastLogMs = 0;
+
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> previewSrv;
+
+		SourceKind sourceKind = SourceKind::None;
+		int backendSlot = -1;
+		std::filesystem::path filePath;
+	};
+
+	struct PendingPreview
+	{
+		bool pending = false;
+
+		CompositeEmblem emblem{};
+		SourceKind sourceKind = SourceKind::None;
+		int backendSlot = -1;
+		std::filesystem::path filePath;
+	};
+
+	inline std::uint64_t NowMs()
+	{
+		return GetTickCount64();
+	}
+
+	inline constexpr std::uint64_t MIN_CANCEL_AGE_MS = 750;
+	inline constexpr std::uint64_t HARD_CANCEL_AGE_MS = 15000;
+
+	inline PendingPreview g_pendingPreview{};
+
+	inline PreviewJob g_job{};
+
+	inline bool g_previewMenuOpen = false;
+	inline bool g_lifecycleReleaseRequested = false;
+
+	struct PrivatePreviewTexture
+	{
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+		Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> srv;
+
+		UINT width = 0;
+		UINT height = 0;
+		DXGI_FORMAT textureFormat = DXGI_FORMAT_UNKNOWN;
+		DXGI_FORMAT srvFormat = DXGI_FORMAT_UNKNOWN;
+
+		bool valid() const
+		{
+			return texture && srv;
+		}
+
+		void reset()
+		{
+			srv.Reset();
+			texture.Reset();
+			width = 0;
+			height = 0;
+			textureFormat = DXGI_FORMAT_UNKNOWN;
+			srvFormat = DXGI_FORMAT_UNKNOWN;
+		}
+	};
+
+	inline PrivatePreviewTexture g_privatePreview{};
+	inline bool g_hasPrivatePreview = false;
+
+	inline bool EnsurePrivatePreviewTexture(
+		ID3D11Texture2D* srcTex,
+		ID3D11ShaderResourceView* srcSrv)
+	{
+		if (!pDevice || !srcTex || !srcSrv)
+			return false;
+
+		D3D11_TEXTURE2D_DESC srcDesc{};
+		srcTex->GetDesc(&srcDesc);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC srcSrvDesc{};
+		srcSrv->GetDesc(&srcSrvDesc);
+
+		DXGI_FORMAT srvFormat = srcSrvDesc.Format;
+		if (srvFormat == DXGI_FORMAT_UNKNOWN)
+			srvFormat = srcDesc.Format;
+
+		if (g_privatePreview.valid() &&
+			g_privatePreview.width == srcDesc.Width &&
+			g_privatePreview.height == srcDesc.Height &&
+			g_privatePreview.textureFormat == srcDesc.Format &&
+			g_privatePreview.srvFormat == srvFormat)
+		{
+			return true;
+		}
+
+		g_privatePreview.reset();
+
+		D3D11_TEXTURE2D_DESC dstDesc{};
+		dstDesc.Width = srcDesc.Width;
+		dstDesc.Height = srcDesc.Height;
+		dstDesc.MipLevels = 1;
+		dstDesc.ArraySize = 1;
+		dstDesc.Format = srcDesc.Format;
+		dstDesc.SampleDesc.Count = 1;
+		dstDesc.SampleDesc.Quality = 0;
+		dstDesc.Usage = D3D11_USAGE_DEFAULT;
+		dstDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+		dstDesc.CPUAccessFlags = 0;
+		dstDesc.MiscFlags = 0;
+
+		if (FAILED(pDevice->CreateTexture2D(&dstDesc, nullptr, g_privatePreview.texture.GetAddressOf())))
+			return false;
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC dstSrvDesc{};
+		dstSrvDesc.Format = srvFormat;
+		dstSrvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		dstSrvDesc.Texture2D.MostDetailedMip = 0;
+		dstSrvDesc.Texture2D.MipLevels = 1;
+
+		if (FAILED(pDevice->CreateShaderResourceView(
+			g_privatePreview.texture.Get(),
+			&dstSrvDesc,
+			g_privatePreview.srv.GetAddressOf())))
+		{
+			g_privatePreview.reset();
+			return false;
+		}
+
+		g_privatePreview.width = srcDesc.Width;
+		g_privatePreview.height = srcDesc.Height;
+		g_privatePreview.textureFormat = srcDesc.Format;
+		g_privatePreview.srvFormat = srvFormat;
+
+		return true;
+	}
+
+	inline ID3D11ShaderResourceView* GetSRVFromGfxImage(GfxImage* image)
+	{
+		if (!image)
+			return nullptr;
+
+		return *reinterpret_cast<ID3D11ShaderResourceView**>(
+			reinterpret_cast<std::uint8_t*>(image) + GFXIMAGE_SRV_OFFSET
+			);
+	}
+
+	inline bool CopyGfxImageToPrivatePreview(GfxImage* image)
+	{
+		if (!image || !pContext)
+			return false;
+
+		ID3D11ShaderResourceView* gameSrv = GetSRVFromGfxImage(image);
+
+		if (!gameSrv)
+			return false;
+
+		Microsoft::WRL::ComPtr<ID3D11Resource> resource;
+		gameSrv->GetResource(resource.GetAddressOf());
+
+		if (!resource)
+			return false;
+
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> srcTex;
+
+		if (FAILED(resource.As(&srcTex)) || !srcTex)
+			return false;
+
+		if (!EnsurePrivatePreviewTexture(srcTex.Get(), gameSrv))
+			return false;
+
+		pContext->CopySubresourceRegion(
+			g_privatePreview.texture.Get(),
+			0,
+			0,
+			0,
+			0,
+			srcTex.Get(),
+			0,
+			nullptr
+		);
+
+		pContext->Flush();
+
+		g_hasPrivatePreview = true;
+		return true;
+	}
+
+	inline ID3D11ShaderResourceView* GetReadyPreviewSRV()
+	{
+		return g_hasPrivatePreview && g_privatePreview.valid()
+			? g_privatePreview.srv.Get()
+			: nullptr;
+	}
+
+	inline CompositeJob* GetTrackedJob_NoLock()
+	{
+		if (!g_job.active || g_job.id == 0)
+			return nullptr;
+
+		if (g_job.jobSlot < 0 || g_job.jobSlot >= COMPOSITE_JOB_COUNT)
+			return nullptr;
+
+		CompositeJob* jobs = GetCompositeJobs();
+		CompositeJob* job = &jobs[g_job.jobSlot];
+
+		if (job->id != g_job.id)
+			return nullptr;
+
+		return job;
+	}
+
+	inline std::uint64_t GetCurrentJobAgeMs()
+	{
+		if (!g_job.active || g_job.submitTimeMs == 0)
+			return 0;
+
+		return NowMs() - g_job.submitTimeMs;
+	}	
+
+	inline bool SetPreviewSRVFromGfxImage(GfxImage* image)
+	{
+		g_job.previewSrv.Reset();
+
+		ID3D11ShaderResourceView* rawSrv = GetSRVFromGfxImage(image);
+
+		if (!rawSrv)
+			return false;
+
+		const HRESULT hr = rawSrv->QueryInterface(
+			__uuidof(ID3D11ShaderResourceView),
+			reinterpret_cast<void**>(g_job.previewSrv.GetAddressOf())
+		);
+
+		return SUCCEEDED(hr) && g_job.previewSrv;
+	}
+
+	inline bool CanCancelCurrentJob()
+	{
+		if (!g_job.active || g_job.ready || g_job.id == 0)
+			return false;
+
+		return GetCurrentJobAgeMs() >= MIN_CANCEL_AGE_MS;
+	}
+
+	inline int GetUsedLayerCount(const CompositeEmblem& emblem)
+	{
+		const auto* raw = reinterpret_cast<const std::uint8_t*>(&emblem);
+
+		int highestUsed = -1;
+
+		for (int i = 0; i < EMBLEM_LAYER_CAPACITY; ++i)
+		{
+			const std::uint8_t* layer = raw + (i * EMBLEM_LAYER_SIZE);
+
+			const std::int16_t materialID =
+				*reinterpret_cast<const std::int16_t*>(layer + 0x00);
+
+			const std::int16_t icon =
+				*reinterpret_cast<const std::int16_t*>(layer + 0x5C);
+
+			if (materialID != -1 || icon != -1)
+				highestUsed = i;
+		}
+
+		return highestUsed + 1;
+	}
+
+	inline bool HasAnyUsedLayers(const CompositeEmblem& emblem)
+	{
+		return GetUsedLayerCount(emblem) > 0;
+	}
+
+	inline int CountActiveCompositeJobs_NoLock()
+	{
+		int active = 0;
+		CompositeJob* jobs = GetCompositeJobs();
+
+		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
+		{
+			if (jobs[i].state != COMPOSITE_STATE_IDLE)
+				++active;
+		}
+
+		return active;
+	}
+
+	inline int FindFirstIdleCompositeJobSlot_NoLock()
+	{
+		CompositeJob* jobs = GetCompositeJobs();
+
+		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
+		{
+			if (jobs[i].state == COMPOSITE_STATE_IDLE)
+				return i;
+		}
+
+		return -1;
+	}
+
+	inline void DumpCompositeJobPool(const char* tag)
+	{
+		CompositeJob* jobs = GetCompositeJobs();
+
+		int active = 0;
+
+		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
+		{
+			if (jobs[i].state == COMPOSITE_STATE_IDLE)
+				continue;
+
+			++active;
+
+			utils::write_Debug(
+				"[CompositePool] %s slot=%d state=%d id=%d type=%d setup=%d result=%p semantic=0x%08X cancel=%d layers=%d",
+				tag ? tag : "pool",
+				i,
+				jobs[i].state,
+				jobs[i].id,
+				jobs[i].type,
+				jobs[i].setupImage ? 1 : 0,
+				jobs[i].resultImage,
+				jobs[i].imageSemantic,
+				jobs[i].cancel ? 1 : 0,
+				jobs[i].layerCount
+			);
+		}
+
+		utils::write_Debug("[CompositePool] %s active=%d firstIdle=%d",
+			tag ? tag : "pool",
+			active,
+			FindFirstIdleCompositeJobSlot_NoLock()
+		);
+	}
+
+	inline bool IsCompositePoolReadyForPreview(const char* reason)
+	{
+		const int active = CountActiveCompositeJobs_NoLock();
+		const int firstIdle = FindFirstIdleCompositeJobSlot_NoLock();
+
+		if (firstIdle < 0 || active >= COMPOSITE_JOB_COUNT - 2)
+		{
+			static std::uint64_t lastLogMs = 0;
+			const std::uint64_t now = NowMs();
+
+			if (now - lastLogMs >= 1000)
+			{
+				/*utils::write_Debug(
+					"[Preview] compositor pool too busy reason=%s active=%d firstIdle=%d",
+					reason ? reason : "unknown",
+					active,
+					firstIdle
+				);*/
+
+				DumpCompositeJobPool("too busy for preview");
+
+				lastLogMs = now;
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+
+	inline bool RequestCancelCurrentJob(const char* reason, bool force = false)
+	{
+		if (!g_job.active || g_job.ready || g_job.id == 0)
+			return false;
+
+		if (g_job.cancelRequested)
+			return true;
+
+		if (g_job.submitTimeMs == 0)
+		{
+			g_job.submitTimeMs = NowMs();
+			g_job.lastLogMs = g_job.submitTimeMs;
+
+			/*utils::write_Debug(
+				"[Preview] cancel blocked, submitTimeMs was 0 id=%d reason=%s",
+				g_job.id,
+				reason ? reason : "unknown"
+			);*/
+
+			g_job.releaseRequested = true;
+			return false;
+		}
+
+		const std::uint64_t age = GetCurrentJobAgeMs();
+
+		if (!force && age < MIN_CANCEL_AGE_MS)
+		{
+			/*utils::write_Debug(
+				"[Preview] cancel delayed id=%d age=%llu reason=%s",
+				g_job.id,
+				static_cast<unsigned long long>(age),
+				reason ? reason : "unknown"
+			);*/
+
+			g_job.releaseRequested = true;
+			return false;
+		}
+
+		/*utils::write_Debug(
+			"[Preview] cancel requested id=%d age=%llu reason=%s",
+			g_job.id,
+			static_cast<unsigned long long>(age),
+			reason ? reason : "unknown"
+		);*/
+
+		CL_CompositePushCancel(g_job.id);
+
+		g_job.cancelRequested = true;
+		g_job.releaseRequested = true;
+
+		return true;
+	}
+
+	inline constexpr int COMPOSITE_EMBLEM = 1;
+
+
+	inline bool IsPreviewCompositeJob(const CompositeJob& job)
+	{
+		return job.type == COMPOSITE_EMBLEM &&
+			job.setupImage &&
+			job.imageSemantic == EMBLEM_PREVIEW_FLAGS;
+	}
+
+	inline int ReapCompletedPreviewCompositeJobs(const char* reason)
+	{
+		CompositeJob* jobs = GetCompositeJobs();
+		int released = 0;
+
+		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
+		{
+			CompositeJob& job = jobs[i];
+
+			if (job.state != COMPOSITE_STATE_COMPLETE)
+				continue;
+
+			if (!IsPreviewCompositeJob(job))
+				continue;
+
+			// Do not steal the currently tracked job.
+			// Update() owns this one.
+			if (g_job.active && job.id == g_job.id)
+				continue;
+
+			const CompositeJobID id = job.id;
+			GfxImage* image = CL_CompositePopImage(id);
+
+			/*utils::write_Debug(
+				"[Preview] reap orphan complete composite slot=%d id=%d image=%p semantic=0x%08X reason=%s",
+				i,
+				id,
+				image,
+				job.imageSemantic,
+				reason ? reason : "unknown"
+			);*/
+
+			if (image)
+				CL_CompositeReleaseImage(image);
+
+			++released;
+		}
+
+		return released;
+	}
+
+	inline int CancelStalePreCompositeJobs(const char* reason)
+	{
+		CompositeJob* jobs = GetCompositeJobs();
+
+		int canceled = 0;
+
+		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
+		{
+			CompositeJob& job = jobs[i];
+
+			if (!IsPreviewCompositeJob(job))
+				continue;
+
+			if (job.state != COMPOSITE_STATE_PRE)
+				continue;
+
+			if (job.type != COMPOSITE_EMBLEM)
+				continue;
+
+			if (!job.setupImage)
+				continue;
+
+			if (job.resultImage)
+				continue;
+
+			if (job.cancel)
+				continue;
+
+			if (g_job.active && job.id == g_job.id)
+				continue;
+
+			/*utils::write_Debug(
+				"[Preview] cancel stale composite slot=%d id=%d semantic=0x%08X reason=%s",
+				i,
+				job.id,
+				job.imageSemantic,
+				reason ? reason : "unknown"
+			);*/
+
+			CL_CompositePushCancel(job.id);
+			++canceled;
+		}
+
+		return canceled;
+	}
+
+
+	inline void RequestReleaseCurrentPreview(
+		const char* reason,
+		bool clearVisiblePreview = true,
+		bool lifecycleRelease = false)
+	{
+		if (lifecycleRelease)
+		{
+			g_lifecycleReleaseRequested = true;
+			g_pendingPreview = {};
+		}
+
+		if (clearVisiblePreview)
+		{
+			g_hasPrivatePreview = false;
+			g_privatePreview.reset();
+			g_job.previewSrv.Reset();
+		}
+
+		if (!g_job.active)
+		{
+			g_job = {};
+			return;
+		}
+
+		g_job.releaseRequested = true;
+
+		RequestCancelCurrentJob(reason ? reason : "release requested", false);
+	}
+
+	inline bool IsPreviewUnsafeForGame()
+	{
+		return hooks::is_user_in_game() ||
+			hooks::is_in_game();
+	}
+
+	inline bool CanUsePreview()
+	{
+		return g_previewMenuOpen &&
+			hooks::is_user_in_lobby() &&
+			!IsPreviewUnsafeForGame();
+	}
+
+	inline void QueuePreview(
+		const CompositeEmblem& emblem,
+		SourceKind sourceKind,
+		int backendSlot,
+		const std::filesystem::path& filePath
+	)
+	{
+		g_pendingPreview.pending = true;
+		g_pendingPreview.emblem = emblem;
+		g_pendingPreview.sourceKind = sourceKind;
+		g_pendingPreview.backendSlot = backendSlot;
+		g_pendingPreview.filePath = filePath;
+
+		/*utils::write_Debug(
+			"[Preview] queued source=%d slot=%d",
+			static_cast<int>(sourceKind),
+			backendSlot
+		);*/
+	}
+
+	inline bool SubmitFromComposite(
+		const CompositeEmblem& emblem,
+		SourceKind sourceKind,
+		int backendSlot = -1,
+		const std::filesystem::path& filePath = {}
+	)
+	{
+		/*utils::write_Debug(
+			"[Preview] SubmitFromComposite enter source=%d slot=%d active=%d ready=%d pending=%d canUse=%d",
+			static_cast<int>(sourceKind),
+			backendSlot,
+			g_job.active ? 1 : 0,
+			g_job.ready ? 1 : 0,
+			g_pendingPreview.pending ? 1 : 0,
+			CanUsePreview() ? 1 : 0
+		);*/
+
+		if (!CanUsePreview())
+		{
+			/*utils::write_Debug("[Preview] Submit blocked because CanUsePreview=false");*/
+			return false;
+		}
+
+		if (g_job.active)
+		{
+			QueuePreview(emblem, sourceKind, backendSlot, filePath);
+			return true;
+		}
+
+		const std::uint64_t now = NowMs();
+
+		if (now < g_nextPreviewAllowedMs)
+		{
+			/*utils::write_Debug(
+				"[Preview] submit delayed by cooldown now=%llu allowed=%llu source=%d slot=%d",
+				static_cast<unsigned long long>(now),
+				static_cast<unsigned long long>(g_nextPreviewAllowedMs),
+				static_cast<int>(sourceKind),
+				backendSlot
+			);*/
+
+			QueuePreview(emblem, sourceKind, backendSlot, filePath);
+			return true;
+		}
+
+		const int layerCount = GetUsedLayerCount(emblem);
+
+		if (layerCount <= 0 || layerCount > EMBLEM_LAYER_CAPACITY)
+		{
+			/*utils::write_Debug("[Preview] bad layerCount=%d", layerCount);*/
+			return false;
+		}
+
+		const int firstIdleBeforePush = FindFirstIdleCompositeJobSlot_NoLock();
+		const int activeBeforePush = CountActiveCompositeJobs_NoLock();
+
+		if (firstIdleBeforePush < 0 || activeBeforePush >= COMPOSITE_JOB_COUNT - 2)
+		{
+			/*utils::write_Debug(
+				"[Preview] submit delayed, compositor pool too busy active=%d firstIdle=%d source=%d slot=%d",
+				activeBeforePush,
+				firstIdleBeforePush,
+				static_cast<int>(sourceKind),
+				backendSlot
+			);*/
+
+			DumpCompositeJobPool("submit delayed");
+
+			QueuePreview(emblem, sourceKind, backendSlot, filePath);
+			g_nextPreviewAllowedMs = NowMs() + 500;
+
+			return true;
+		}
+
+		const CompositeJobID id = CL_CompositePushEmblem(
+			&emblem,
+			layerCount,
+			false,
+			nullptr,
+			EMBLEM_PREVIEW_FLAGS
+		);
+
+		if (id == 0)
+		{
+			/*utils::write_Debug("[Preview] PushEmblem returned 0");*/
+			return false;
+		}
+
+		const int jobSlot = FindJobSlotById_NoLock(id);
+
+		if (jobSlot < 0)
+		{
+			/*utils::write_Debug("[Preview] submitted id=%d but could not find job slot", id);*/
+			return false;
+		}
+
+		g_job = {};
+		g_job.active = true;
+		g_job.ready = false;
+		g_job.cancelRequested = false;
+		g_job.releaseRequested = false;
+		g_job.id = id;
+		g_job.jobSlot = jobSlot;
+		g_job.image = nullptr;
+		g_job.submitTimeMs = now;
+		g_job.lastLogMs = now;
+		g_job.sourceKind = sourceKind;
+		g_job.backendSlot = backendSlot;
+		g_job.filePath = filePath;
+
+		/*utils::write_Debug(
+			"[Preview] submitted id=%d slot=%d time=%llu",
+			g_job.id,
+			g_job.jobSlot,
+			static_cast<unsigned long long>(g_job.submitTimeMs)
+		);*/
+
+		return true;
+	}
+
+	inline std::uint64_t g_poolBusySinceMs = 0;
+	inline bool g_triedStalePoolCleanup = false;
+
+	inline void StartPendingPreviewIfPossible()
+	{
+		if (g_job.active || !g_pendingPreview.pending)
+			return;
+
+		const bool poolReady = IsCompositePoolReadyForPreview("pending");
+
+		if (!poolReady)
+		{
+			if (g_poolBusySinceMs == 0)
+				g_poolBusySinceMs = NowMs();
+
+			if (!g_triedStalePoolCleanup &&
+				CanUsePreview() &&
+				NowMs() - g_poolBusySinceMs >= 5000)
+			{
+				const int canceled = CancelStalePreCompositeJobs("pending pool stuck");
+
+				/*utils::write_Debug(
+					"[Preview] stale pool cleanup canceled=%d",
+					canceled
+				);*/
+
+				g_triedStalePoolCleanup = true;
+				g_nextPreviewAllowedMs = NowMs() + 500;
+			}
+
+			return;
+		}
+
+		g_poolBusySinceMs = 0;
+		g_triedStalePoolCleanup = false;
+
+		if (g_lifecycleReleaseRequested || !CanUsePreview())
+		{
+			/*utils::write_Debug(
+				"[Preview] dropped pending preview lifecycle=%d canUse=%d",
+				g_lifecycleReleaseRequested ? 1 : 0,
+				CanUsePreview() ? 1 : 0
+			);*/
+
+			g_pendingPreview = {};
+			g_lifecycleReleaseRequested = false;
+			return;
+		}
+
+		if (NowMs() < g_nextPreviewAllowedMs)
+			return;
+
+		if (!IsCompositePoolReadyForPreview("pending"))
+			return;
+
+		PendingPreview pending = g_pendingPreview;
+		g_pendingPreview = {};
+
+		SubmitFromComposite(
+			pending.emblem,
+			pending.sourceKind,
+			pending.backendSlot,
+			pending.filePath
+		);
+	}
+
+	inline void FinishCurrentJobAndMaybeStartPending(const char* reason)
+	{
+		const bool mayStartPending =
+			g_pendingPreview.pending &&
+			!g_lifecycleReleaseRequested &&
+			CanUsePreview();
+
+		g_job = {};
+
+		if (mayStartPending)
+		{
+			StartPendingPreviewIfPossible();
+			return;
+		}
+
+		g_pendingPreview = {};
+		g_lifecycleReleaseRequested = false;
+	}
+
+	inline void Update()
+	{
+		if (!g_job.active)
+		{
+			StartPendingPreviewIfPossible();
+			return;
+		}
+
+		if (g_job.ready)
+			return;
+
+		CompositeJob* job = GetTrackedJob_NoLock();
+
+		if (!job)
+		{
+			FinishCurrentJobAndMaybeStartPending("released/canceled idle");
+			return;
+		}
+
+		const std::uint64_t now = NowMs();
+		const std::uint64_t age = GetCurrentJobAgeMs();
+
+		if (g_job.releaseRequested && !g_job.cancelRequested && age >= MIN_CANCEL_AGE_MS)
+		{
+			RequestCancelCurrentJob("delayed release", false);
+			return;
+		}
+
+		if (!g_job.cancelRequested && age >= HARD_CANCEL_AGE_MS)
+		{
+			RequestCancelCurrentJob("hard timeout", false);
+			return;
+		}
+
+		if (job->state == 4)
+		{
+			const CompositeJobID finishedId = g_job.id;
+
+			GfxImage* image = CL_CompositePopImage(finishedId);
+
+			if (!image)
+			{
+				FinishCurrentJobAndMaybeStartPending("complete but PopImage failed");
+				return;
+			}
+
+			bool copied = false;
+
+			if (!g_job.releaseRequested &&
+				!g_job.cancelRequested &&
+				!g_lifecycleReleaseRequested &&
+				CanUsePreview())
+			{
+				copied = CopyGfxImageToPrivatePreview(image);
+			}
+
+			// Critical: immediately return the compositor temp image.
+			CL_CompositeReleaseImage(image);
+			image = nullptr;
+
+			/*utils::write_Debug(
+				"[Preview] completed id=%d copied=%d privateSrv=%p",
+				finishedId,
+				copied ? 1 : 0,
+				g_privatePreview.srv.Get()
+			);*/
+
+			g_job = {};
+			g_nextPreviewAllowedMs = NowMs() + PREVIEW_SUBMIT_COOLDOWN_MS;
+
+			if (copied && CanUsePreview())
+			{
+				StartPendingPreviewIfPossible();
+			}
+			else
+			{
+				g_pendingPreview = {};
+				g_lifecycleReleaseRequested = false;
+			}
+
+			return;
+		}
+
+		if (job->state == 0 && (g_job.cancelRequested || g_job.releaseRequested))
+		{
+			/*utils::write_Debug(
+				"[Preview] released/canceled job reached idle id=%d cancel=%d release=%d",
+				g_job.id,
+				g_job.cancelRequested ? 1 : 0,
+				g_job.releaseRequested ? 1 : 0
+			);*/
+
+			g_job = {};
+			g_pendingPreview = {};
+			return;
+		}
+
+		if (now - g_job.lastLogMs >= 1000)
+		{
+			/*utils::write_Debug(
+				"[Preview] waiting id=%d state=%d age=%llu cancel=%d pending=%d",
+				g_job.id,
+				job->state,
+				static_cast<unsigned long long>(age),
+				g_job.cancelRequested ? 1 : 0,
+				g_pendingPreview.pending ? 1 : 0
+			);*/
+
+			g_job.lastLogMs = now;
+		}
+	}
+
+	inline void ResetPreviewAfterMatchReturn()
+	{
+		/*utils::write_Debug("[Preview] reset after match return");*/
+
+		if (g_job.active)
+		{
+			RequestReleaseCurrentPreview("reset after match return", true, true);
+		}
+		else
+		{
+			g_job = {};
+			g_lifecycleReleaseRequested = false;
+		}
+
+		g_pendingPreview = {};
+
+		g_hasPrivatePreview = false;
+		g_privatePreview.reset();
+
+		g_nextPreviewAllowedMs = NowMs() + 2500;
+
+		g_poolBusySinceMs = 0;
+		g_triedStalePoolCleanup = false;
+
+		const int reaped = ReapCompletedPreviewCompositeJobs("post-match reset");
+		const int canceled = CancelStalePreCompositeJobs("post-match reset");
+
+		if (reaped || canceled)
+		{
+			/*utils::write_Debug(
+				"[Preview] post-match pool cleanup reaped=%d canceled=%d",
+				reaped,
+				canceled
+			);*/
+		}
+
+		g_emblemExportBrowser.selectedIndex = -1;
+		g_emblemImportBrowser.selectedIndex = -1;
+
+		RefreshEmblemSlotList(CONTROLLER_INDEX_0);
+		RefreshEmblemFileList();
+	}
+
+	inline void ClearLifecycleReleaseIfPreviewAllowed(const char* reason)
+	{
+		if (g_lifecycleReleaseRequested && CanUsePreview() && !g_job.active)
+		{
+			/*utils::write_Debug(
+				"[Preview] clearing lifecycle release reason=%s",
+				reason ? reason : "unknown"
+			);*/
+
+			g_lifecycleReleaseRequested = false;
+		}
+	}
+
+	inline void UpdateReleaseGuards(bool menuOpen)
+	{
+		static bool initialized = false;
+		static bool lastMenuOpen = false;
+		static bool lastUnsafe = false;
+		static bool lastMatchLoaded = false;
+		static bool lastLobby = false;
+
+		g_previewMenuOpen = menuOpen;
+
+		const bool unsafe = IsPreviewUnsafeForGame();		
+
+		const bool matchLoaded = hooks::is_match_loaded();
+		const bool lobby = hooks::is_user_in_lobby();
+
+		if (!initialized)
+		{
+			initialized = true;
+			lastMenuOpen = menuOpen;
+			lastUnsafe = unsafe;
+			lastMatchLoaded = matchLoaded;
+			lastLobby = lobby;
+
+			if (!menuOpen || unsafe || matchLoaded)
+				RequestReleaseCurrentPreview("initial unsafe state", true, true);
+
+			return;
+		}
+
+		if (lastMenuOpen && !menuOpen)
+			RequestReleaseCurrentPreview("menu closed", true, true);
+
+		if (!lastUnsafe && unsafe)
+			RequestReleaseCurrentPreview("entering game/loading", true, true);
+
+		if (!lastMatchLoaded && matchLoaded)
+			RequestReleaseCurrentPreview("match loaded", true, true);
+
+		const bool inGameNow = unsafe || matchLoaded;
+
+		if (inGameNow)
+		{
+			g_wasInGameForPreview = true;
+			g_didPostMatchPreviewReset = false;
+			g_lobbyStableSinceMs = 0;
+		}
+
+		if (g_wasInGameForPreview && !inGameNow && lobby)
+		{
+			if (g_lobbyStableSinceMs == 0)
+				g_lobbyStableSinceMs = NowMs();
+
+			if (!g_didPostMatchPreviewReset && NowMs() - g_lobbyStableSinceMs >= 2000)
+			{
+				ResetPreviewAfterMatchReturn();
+
+				g_didPostMatchPreviewReset = true;
+				g_wasInGameForPreview = false;
+				g_lifecycleReleaseRequested = false;
+			}
+		}
+		else if (!lobby)
+		{
+			g_lobbyStableSinceMs = 0;
+		}
+
+		if (!unsafe && !matchLoaded && lobby && menuOpen && !g_job.active)
+		{
+			ClearLifecycleReleaseIfPreviewAllowed("stable lobby");
+		}
+
+		lastMenuOpen = menuOpen;
+		lastUnsafe = unsafe;
+		lastMatchLoaded = matchLoaded;
+		lastLobby = lobby;
+	}
+
+	inline bool PreviewBackendSlot(
+		ControllerIndex_t controller,
+		int actualSlot
+	)
+	{
+		/*utils::write_Debug(
+			"[Preview] PreviewBackendSlot enter slot=%d menu=%d lobby=%d userInGame=%d localInGame=%d comInGame=%d lifecycle=%d active=%d pending=%d",
+			actualSlot,
+			g_previewMenuOpen ? 1 : 0,
+			hooks::is_user_in_lobby() ? 1 : 0,
+			hooks::is_user_in_game() ? 1 : 0,
+			hooks::local_client_is_in_game() ? 1 : 0,
+			hooks::is_in_game() ? 1 : 0,
+			g_lifecycleReleaseRequested ? 1 : 0,
+			g_job.active ? 1 : 0,
+			g_pendingPreview.pending ? 1 : 0
+		);*/
+
+		if (!CanUsePreview())
+		{
+			RequestReleaseCurrentPreview("preview requested while unsafe", true);
+			/*utils::write_Debug("[Preview] blocked preview while unsafe/not-lobby");*/
+			return false;
+		}
+
+		constexpr int CUSTOMIZATION_TYPE_EMBLEM = 3;
+		constexpr int STORAGE_EMBLEMS_FILE_TYPE = 26;
+
+		if (actualSlot < 0 || actualSlot >= 32)
+		{
+			/*utils::write_Debug("[Preview] invalid slot=%d", actualSlot);*/
+			return false;
+		}
+
+		CompositeEmblem emblem{};
+		BG_InitCompositeEmblem(&emblem);
+
+		Live_Emblems_GetEmblemData(
+			controller,
+			CUSTOMIZATION_TYPE_EMBLEM,
+			actualSlot,
+			static_cast<StorageFileType>(STORAGE_EMBLEMS_FILE_TYPE),
+			&emblem
+		);
+
+		const int layerCount = GetUsedLayerCount(emblem);
+
+		/*utils::write_Debug(
+			"[Preview] slot=%d layerCount=%d",
+			actualSlot,
+			layerCount
+		);*/
+
+		if (layerCount <= 0)
+		{
+			/*utils::write_Debug("[Preview] slot=%d has no used layers after Live_Emblems_GetEmblemData", actualSlot);*/
+			return false;
+		}
+
+		ClearLifecycleReleaseIfPreviewAllowed("backend preview requested");
+
+		return SubmitFromComposite(
+			emblem,
+			SourceKind::BackendSlot,
+			actualSlot
+		);
+	}
+
+	inline bool PreviewEmblemFile(const std::filesystem::path& path)
+	{
+		/*utils::write_Debug(
+			"[Preview] PreviewEmblemFile enter path=%s menu=%d lobby=%d",
+			path.string().c_str(),
+			g_previewMenuOpen ? 1 : 0,
+			hooks::is_user_in_lobby() ? 1 : 0
+		);*/
+
+		if (!CanUsePreview())
+		{
+			RequestReleaseCurrentPreview("preview requested while unsafe", true);
+			/*utils::write_Debug("[Preview] blocked preview while unsafe/in-game");*/
+			return false;
+		}
+
+		ReadEmblemFileResult imported{};
+
+		if (!ReadEmblemFile(path, imported))
+			return false;
+
+		if (!HasAnyUsedLayers(imported.emblem))
+			return false;
+
+		ClearLifecycleReleaseIfPreviewAllowed("file preview requested");
+
+		return SubmitFromComposite(
+			imported.emblem,
+			SourceKind::EmblemFile,
+			-1,
+			path
+		);
+	}
+
+	inline bool PreviewBackendComposite(
+		const CompositeEmblem& emblem,
+		int actualSlot
+	)
+	{
+		if (!CanUsePreview())
+		{
+			RequestReleaseCurrentPreview("backend composite preview while unsafe", true);
+			/*utils::write_Debug("[Preview] blocked backend composite preview while unsafe/in-game");*/
+			return false;
+		}
+
+		return SubmitFromComposite(
+			emblem,
+			SourceKind::BackendSlot,
+			actualSlot
+		);
+	}
+
+
+	inline void DrawCheckerboardBackground(
+		ImDrawList* draw,
+		const ImVec2& min,
+		const ImVec2& max,
+		float cellSize = 16.0f,
+		ImU32 colorA = IM_COL32(70, 70, 70, 255),
+		ImU32 colorB = IM_COL32(95, 95, 95, 255))
+	{
+		if (!draw)
+			return;
+
+		draw->PushClipRect(min, max, true);
+
+		const float width = max.x - min.x;
+		const float height = max.y - min.y;
+
+		const int cols = static_cast<int>(std::ceil(width / cellSize));
+		const int rows = static_cast<int>(std::ceil(height / cellSize));
+
+		for (int y = 0; y < rows; ++y)
+		{
+			for (int x = 0; x < cols; ++x)
+			{
+				const ImU32 col = ((x + y) & 1) ? colorA : colorB;
+
+				ImVec2 p0(
+					min.x + (x * cellSize),
+					min.y + (y * cellSize)
+				);
+
+				ImVec2 p1(
+					(std::min)(p0.x + cellSize, max.x),
+					(std::min)(p0.y + cellSize, max.y)
+				);
+
+				draw->AddRectFilled(p0, p1, col);
+			}
+		}
+
+		draw->PopClipRect();
+	}
+
+	inline void DrawPreviewImageDirect(const ImVec2& requestedSize)
+	{
+		ID3D11ShaderResourceView* srv = GetReadyPreviewSRV();
+
+		if (!srv)
+		{
+			ImGui::TextDisabled("No preview SRV");
+			return;
+		}
+
+		ImVec2 drawSize = requestedSize;
+
+		const ImVec2 avail = ImGui::GetContentRegionAvail();
+
+		if (avail.x > 0.0f && avail.y > 0.0f)
+		{
+			const float scaleX = avail.x / requestedSize.x;
+			const float scaleY = avail.y / requestedSize.y;
+			const float scale = (scaleX < scaleY) ? scaleX : scaleY;
+
+			
+			drawSize.x = requestedSize.x * scale;
+			drawSize.y = requestedSize.y * scale;
+			
+		}
+
+		const float horizontalOffset = (avail.x - drawSize.x) * 0.5f;
+
+		if (horizontalOffset > 0.0f)
+		{
+			ImGui::SetCursorPosX(
+				ImGui::GetCursorPosX() + horizontalOffset
+			);
+		}
+
+		const ImVec2 pos = ImGui::GetCursorScreenPos();
+		const ImVec2 end(pos.x + drawSize.x, pos.y + drawSize.y);
+
+		ImDrawList* draw = ImGui::GetWindowDrawList();
+
+		DrawCheckerboardBackground(draw, pos, end, 16.0f);
+
+		draw->AddImage(
+			reinterpret_cast<ImTextureID>(srv),
+			pos,
+			end,
+			ImVec2(0.0f, 0.0f),
+			ImVec2(1.0f, 1.0f),
+			IM_COL32(255, 255, 255, 255)
+		);
+
+		draw->AddRect(
+			pos,
+			end,
+			IM_COL32(255, 255, 255, 120)
+		);
+
+		ImGui::Dummy(drawSize);
+	}
+
+	inline void DrawPreviewContents(
+		const ImVec2& imageSize = ImVec2(1200.0f, 736.0f)
+	)
+	{
+		ImGui::TextUnformatted("Preview");
+
+		// Inside your ImGui rendering block
+		const char* resolutionOptions[] = {
+			"Low (300x184)",
+			"Medium (600x368)",
+			"Good (1200x736)",
+			"Best (2400x1472)"
+		};
+
+		ImGui::Combo("Emblem Quality", &iSelectedResolutionTier, resolutionOptions, IM_ARRAYSIZE(resolutionOptions));
+
+		ImGui::Separator();
+		ImGui::Spacing();
+
+		if (!GetReadyPreviewSRV())
+		{
+			if (g_job.active)
+				ImGui::TextDisabled("Rendering.");
+			else
+				ImGui::TextDisabled("No preview selected");
+
+			return;
+		}
+
+		DrawPreviewImageDirect(imageSize);
+	}
+
+	void DrawEmblemImportUI()
+	{
+		static int targetSlot = 0;
+		static bool allowOverwrite = false;
+
+		const auto emblemsDir = GetEmblemsDirectory();
+
+		ImGui::Separator();
+
+		ImGui::InputInt("Target Slot", &targetSlot);
+
+		if (targetSlot < 0)
+			targetSlot = 0;
+
+		if (targetSlot > 31)
+			targetSlot = 31;
+
+
+		if (ImGui::Button("Refresh Emblem Files"))
+		{
+			RefreshEmblemFileList();
+		}
+
+		ImGui::SameLine();
+
+		ImGui::Checkbox("Allow overwrite used slot", &allowOverwrite);
+
+		//ImGui::SameLine();
+
+		ImGui::Checkbox("Rename Imported Emblem", &customImportRename);
+
+		ImGui::InputTextWithHint("##CustomImportName", "Import Emblem Name...", &customImportName);
+
+		ImGui::Separator();
+
+		if (g_emblemImportBrowser.files.empty())
+		{
+			ImGui::TextDisabled("No .emblem files found.");
+		}
+		else
+		{
+			ImGui::Text("Available .emblem files:");
+
+			if (ImGui::BeginListBox("##EmblemFileList", ImVec2(-FLT_MIN, 150.0f)))
+			{
+				for (int i = 0; i < static_cast<int>(g_emblemImportBrowser.files.size()); ++i)
+				{
+					const bool selected = g_emblemImportBrowser.selectedIndex == i;
+
+					if (ImGui::Selectable(g_emblemImportBrowser.files[i].displayName.c_str(), selected)) {
+						g_emblemImportBrowser.selectedIndex = i;
+						PreviewEmblemFile(g_emblemImportBrowser.files[i].path);
+					}
+
+					if (selected)
+						ImGui::SetItemDefaultFocus();
+				}
+
+				ImGui::EndListBox();
+			}
+		}
+
+		const bool hasSelection =
+			g_emblemImportBrowser.selectedIndex >= 0 &&
+			g_emblemImportBrowser.selectedIndex < static_cast<int>(g_emblemImportBrowser.files.size());
+
+		if (hasSelection)
+		{
+			const auto& selected = g_emblemImportBrowser.files[g_emblemImportBrowser.selectedIndex];
+
+			//ImGui::TextWrapped("Selected: %s", selected.fileName.c_str());
+
+			if (ImGui::Button("Import Selected Emblem"))
+			{
+				const bool ok = ImportEmblemFileBackend(
+					CONTROLLER_INDEX_0,
+					targetSlot,
+					selected.path,
+					allowOverwrite
+				);
+
+				ImGui::InsertNotification({
+					ok ? ImGuiToastType::Success : ImGuiToastType::Error,
+					3000,
+					ok ? "Imported emblem" : "Failed to import emblem"
+					});
+			}
+		}
+		else
+		{
+			ImGui::BeginDisabled();
+			ImGui::Button("Import Selected Emblem");
+			ImGui::EndDisabled();
+		}
+	}
+
+	void DrawEmblemExportUI()
+	{
+		constexpr ControllerIndex_t controller = CONTROLLER_INDEX_0;
+
+		const auto emblemsDir = GetEmblemsDirectory();
+
+		bool refreshNeeded = false;
+
+		if (ImGui::Button("Refresh Emblem Slots"))
+			refreshNeeded = true;
+
+		ImGui::SameLine();
+
+		if (ImGui::Checkbox("Show empty slots", &g_emblemExportBrowser.showEmptySlots))
+			refreshNeeded = true;
+
+		if (refreshNeeded)
+			RefreshEmblemSlotList(controller);
+
+		ImGui::Separator();
+
+		if (g_emblemExportBrowser.slots.empty())
+		{
+			ImGui::TextDisabled("No emblem slots found.");
+		}
+		else
+		{
+			ImGui::Text("Emblem slots:");
+
+			if (ImGui::BeginListBox("##EmblemSlotList", ImVec2(-FLT_MIN, 150.0f)))
+			{
+				for (int i = 0; i < static_cast<int>(g_emblemExportBrowser.slots.size()); ++i)
+				{
+					const auto& entry = g_emblemExportBrowser.slots[i];
+					const bool selected = g_emblemExportBrowser.selectedIndex == i;
+
+					if (ImGui::Selectable(entry.displayName.c_str(), selected)) {
+						g_emblemExportBrowser.selectedIndex = i;
+						PreviewBackendSlot(CONTROLLER_INDEX_0, entry.slot);
+					}
+
+
+					if (selected)
+						ImGui::SetItemDefaultFocus();
+				}
+
+				ImGui::EndListBox();
+			}
+		}
+
+		const bool hasSelection =
+			g_emblemExportBrowser.selectedIndex >= 0 &&
+			g_emblemExportBrowser.selectedIndex < static_cast<int>(g_emblemExportBrowser.slots.size());
+
+		if (!hasSelection)
+		{
+			ImGui::BeginDisabled();
+			ImGui::Button("Export Selected Emblem");
+			ImGui::EndDisabled();
+			return;
+		}
+
+		const auto& selected = g_emblemExportBrowser.slots[g_emblemExportBrowser.selectedIndex];
+
+		ImGui::Separator();
+
+		/*ImGui::Text("Selected:");
+		ImGui::Text("Slot: %d", selected.slot);
+		ImGui::Text("Sort Index: %d", selected.sortIndex);
+		ImGui::Text("Name: %s", selected.name.c_str());
+
+		if (!selected.isUsed)
+		{
+			ImGui::TextDisabled("This slot is empty.");
+			ImGui::BeginDisabled();
+			ImGui::Button("Export Selected Emblem");
+			ImGui::EndDisabled();
+			return;
+		}*/
+
+		if (ImGui::Button("Export Selected Emblem"))
+		{
+			const bool ok = ExportEmblemBackend(
+				controller,
+				selected.slot,
+				emblemsDir
+			);
+
+			ImGui::InsertNotification({
+				ok ? ImGuiToastType::Success : ImGuiToastType::Error,
+				3000,
+				ok ? "Exported emblem" : "Failed to export emblem"
+				});
+		}
+
+
+		ImGui::InputTextWithHint("##RenameEmblem", "Emblem Name", &EmblemRename);
+		ImGui::SameLine();
+		if (ImGui::Button("Rename Selected Emblem"))
+		{
+			const bool ok = RenameEmblem(
+				selected.slot,
+				EmblemRename
+			);
+
+			ImGui::InsertNotification({
+				ok ? ImGuiToastType::Success : ImGuiToastType::Error,
+				3000,
+				ok ? "Renamed emblem" : "Failed to rename emblem"
+				});
+		}
+
+
+	}
+
+	inline void DrawImportExportContents()
+	{
+		ImGui::TextUnformatted("Export In-Game Emblems");
+		ImGui::Separator();
+
+		DrawEmblemExportUI();
+
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+
+		ImGui::TextUnformatted("Import .emblem File");
+		ImGui::Separator();
+
+		DrawEmblemImportUI();
+	}
+
+	inline void DrawEmblemsTabLayout(
+		float requestedLeftWidth = 430.0f
+	)
+	{
+		const ImVec2 avail = ImGui::GetContentRegionAvail();
+		const float spacing = ImGui::GetStyle().ItemSpacing.x;
+		const float minimumRightWidth = 260.0f;
+
+		float leftWidth = requestedLeftWidth;
+
+		if (leftWidth > avail.x)
+			leftWidth = avail.x;
+
+		const float rightWidth = avail.x - leftWidth - spacing;
+
+		if (rightWidth < minimumRightWidth)
+		{
+			const float toolsHeight = avail.y * 0.60f;
+
+			ImGui::BeginChild(
+				"##EmblemToolsChild",
+				ImVec2(0.0f, toolsHeight),
+				true
+			);
+
+			DrawImportExportContents();
+
+			ImGui::EndChild();
+
+			ImGui::BeginChild(
+				"##EmblemPreviewChild",
+				ImVec2(0.0f, 0.0f),
+				true
+			);
+
+			DrawPreviewContents();
+
+			ImGui::EndChild();
+
+			return;
+		}
+
+		ImGui::BeginChild(
+			"##EmblemToolsChild",
+			ImVec2(leftWidth, 0.0f),
+			true
+		);
+
+		DrawImportExportContents();
+
+		ImGui::EndChild();
+
+		ImGui::SameLine();
+
+		ImGui::BeginChild(
+			"##EmblemPreviewChild",
+			ImVec2(0.0f, 0.0f),
+			true
+		);
+
+		DrawPreviewContents();
+
+		ImGui::EndChild();
+	}
+}
+
+using namespace EmblemPreview;
+
+ImColor PulsingColor(
+	const ImVec4& colorA,
+	const ImVec4& colorB,
+	float speed = 1.0f
+)
+{
+	const float pulse =
+		(sinf(static_cast<float>(ImGui::GetTime()) * speed) + 1.0f) * 0.5f;
+
+	const ImVec4 color = ImLerp(colorA, colorB, pulse);
+	return ImColor(color);
+}
+
+inline void DrawEmblemImportExportContents()
+{
+	ImGui::Text("Export");
+	ImGui::Separator();
+
+	DrawEmblemExportUI();
+
+	ImGui::Separator();
+	ImGui::Text("Import");
+
+	DrawEmblemImportUI();
+}
+
+inline void DrawEmblemsTab()
+{
+	const ImVec2 avail = ImGui::GetContentRegionAvail();
+
+	const float leftWidth = 430.0f;
+
+	const float spacing = ImGui::GetStyle().ItemSpacing.x;
+	const float rightWidth = avail.x - leftWidth - spacing;
+
+	if (rightWidth <= 260.0f)
+	{
+		if (ImGui::BeginChild("##EmblemToolsChild", ImVec2(0.0f, avail.y * 0.60f), true))
+		{
+			DrawEmblemImportExportContents();
+		}
+		ImGui::EndChild();
+
+		if (ImGui::BeginChild("##EmblemPreviewChild", ImVec2(0.0f, 0.0f), true))
+		{
+			EmblemPreview::DrawPreviewContents();
+		}
+		ImGui::EndChild();
+
+		return;
+	}
+
+	if (ImGui::BeginChild("##EmblemToolsChild", ImVec2(leftWidth, 0.0f), true))
+	{
+		DrawEmblemImportExportContents();
+	}
+	ImGui::EndChild();
+
+	ImGui::SameLine();
+
+	if (ImGui::BeginChild("##EmblemPreviewChild", ImVec2(0.0f, 0.0f), true))
+	{
+		DrawPreviewContents();
+	}
+	ImGui::EndChild();
+}
+
 void draw() {
 
 	RECT desktop;
@@ -2845,7 +5510,7 @@ void draw() {
 			ImVec2(0.5f, 0.5f)
 		);
 
-		if (ImGui::Begin(" - Disclaimer - ", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize))
+		if (ImGui::Begin(" - Disclaimer - ", nullptr, ImGuiWindowFlags_NoCollapse))
 		{
 			ImGui::SetWindowFontScale(1.3f);
 
@@ -2901,38 +5566,55 @@ void draw() {
 		ImDrawList* drawlist = ImGui::GetBackgroundDrawList();
 		drawlist->AddRectFilled(ImVec2(0, 0), ImVec2(desktop.right, desktop.bottom), IM_COL32(0, 0, 0, 150));
 
-		ImGui::SetNextWindowSize(ImVec2(650.0f, 350.0f));
+		static bool wasEmblemsTabVisible = false;
+
+		bool emblemsTabVisible = false;
+
+		ImGui::SetNextWindowSize(ImVec2(850.0f, 500.0f), ImGuiCond_Once);
 
 		std::string title = std::string(" - Scropts QOL for BO3 - ");
 
 		ImGui::Begin(title.c_str(), &open);
 
-		ImGui::BeginTabBar("##main");		
-
-		ImGuiTabItemFlags flags0 = (bController && tab == 0) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Account", nullptr, flags0)) {
+		ImGui::BeginTabBar("##main");
+		
+		if (ImGui::BeginTabItem("Account", nullptr)) {
 
 			auto currentMode = Com_SessionMode_GetMode();
-			int maxXP = 1457200;
-			int maxParagonXP = 52542000;
-			int maxLevel = 54;
 
-			if(currentMode == MODE_CAMPAIGN) {
+			int maxXP;
+			int maxParagonXP;
+			int maxLevel;
+			int maxPrestige;
+			int minRank;
+			int maxRankIcon;
+
+			if (currentMode == MODE_CAMPAIGN) {
 				maxLevel = 19;
+				maxPrestige = 0;
 				maxXP = 581651;
 				maxParagonXP = 0;
+				maxRankIcon = 0;
 				minRank = 0;
 			}
 			else if (currentMode == MODE_MULTIPLAYER) {
+				maxLevel = 54;
+				maxPrestige = 11;
 				maxXP = 1457200;
 				maxParagonXP = 52542000;
+				maxRankIcon = 47;
 				minRank = 56;
 			}
 			else if (currentMode == MODE_ZOMBIES) {
+				maxLevel = 34;
+				maxPrestige = 11;
 				maxXP = 1375000;
 				maxParagonXP = 52345460;
+				maxRankIcon = 55;
 				minRank = 36;
-			}			
+			}
+
+			constexpr int kStatMax = MAXINT / 2;
 
 			ImGui::BeginChild("##RANKING", ImGui::GetContentRegionAvail());
 
@@ -2963,24 +5645,30 @@ void draw() {
 			HelpMarker("Enable to switch between MP and Arena stat editor.");
 
 			if (ImGui::Button("Set Rank")) {
+				ClampInt(pPrestige, 0, maxPrestige);
+				ClampInt(pLevel, 0, maxLevel);
+				ClampInt(ParagonRank, minRank, 1000);
+
+				UpdateRankXPFromInputs(currentMode, pLevel, ParagonRank, rankXp, paragonRankXp);
 
 				setAllRanks();
-				//LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
-
 				LiveStorage_UploadStatsForController(0);
 			}
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Set Stats")) {
-				setStats();
-				//setChallenges();
-				//unlockSpecialistOutfits();
-				//setMaxTokens();
+			if (ImGui::Button("Set Rank Icon")) {
+				ClampInt(icon, 0, maxRankIcon);
+				LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
 				LiveStorage_UploadStatsForController(0);
 			}
 
+			ImGui::SameLine();
 
+			if (ImGui::Button("Set ALL Stats")) {
+				setStats();
+				LiveStorage_UploadStatsForController(0);
+			}
 
 			// Prestige
 			ImGui::Separator();
@@ -2989,48 +5677,80 @@ void draw() {
 
 			ImGui::SameLine();
 
-			HelpMarker("CTRL + Click to input custom values");
+			HelpMarker("Input Level and Prestige Master Level. XP is pulled from the game's rank tables automatically.");
 
 			ImGui::Separator();
 
 			if (ImGui::Button("Send##PRESTIGE")) {
+				ClampInt(pPrestige, 0, 11);
+
 				setPrestige(pPrestige);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Prestige ##RANK", &pPrestige, 0, 11);
+			InputIntClamped("Prestige ##RANK", &pPrestige, 0, 11);
 
 			// Level
-			if (ImGui::Button("Send##LEVEL")) {
-				setpLevel(pLevel);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Level ##RANK", &pLevel, 0, maxLevel);
+			if (ImGui::Button("Send##LEVEL"))
+			{
+				const int mode = Com_SessionMode_GetMode();
 
-			// XP max: CP - 581651, MP - 1457200, ZM - 1375000
-			if (ImGui::Button("Send##XP")) {
+				int visibleLevel = pLevel;
+				ClampInt(visibleLevel, 1, maxLevel + 1);
+
+				const int storedRank = visibleLevel - 1;
+
+				rankXp = GetRankXPFromTable(mode, storedRank);
+
+				setpLevel(storedRank);
 				setpLevelXP(rankXp);
+
 				LiveStorage_UploadStatsForController(0);
 			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Base XP##RANK", &rankXp, 0, maxXP);
+			
+			int displayLevel = pLevel + 1;
 
-			// Paragon Rank Max: 
-			if (ImGui::Button("Send##PRESTIGEMASTERRANK")) {
+			ImGui::SameLine();
+
+			if (InputIntClamped("Level ##RANK", &displayLevel, 1, maxLevel + 1))
+			{
+				pLevel = displayLevel - 1;
+			}
+
+			ClampInt(pLevel, 0, maxLevel);
+
+			// Prestige Master Rank
+			if (ImGui::Button("Send##PRESTIGEMASTERRANK"))
+			{
+				const int mode = Com_SessionMode_GetMode();
+
+				ClampInt(ParagonRank, minRank, 1000);
+
+				paragonRankXp = GetParagonXPFromTable(mode, ParagonRank);
+
 				setMasterRank(ParagonRank);
-				LiveStorage_UploadStatsForController(0);
-			}
-			ImGui::SameLine();
-			ImGui::SliderInt("Prestige Master Lvl##RANK", &ParagonRank, minRank, 1000);
-
-			// Paragon XP Max: CP - 0, MP - 52542000, ZM - 52345460
-			if (ImGui::Button("Send##PRESTIGEMASTERXP")) {
 				setMasterXP(paragonRankXp);
+
 				LiveStorage_UploadStatsForController(0);
 			}
+
 			ImGui::SameLine();
-			ImGui::SliderInt("Prestige Master XP##RANK", &paragonRankXp, 0, maxParagonXP);
+			InputIntClamped("Prestige Master Lvl##RANK", &ParagonRank, minRank, 1000);
+
+			// Rank Icon
+			if (ImGui::Button("Send##RANKICON")) {
+				ClampInt(icon, 0, maxRankIcon);
+				LiveStats_SetStatByKey(
+					Com_SessionMode_GetMode(),
+					CONTROLLER_INDEX_0,
+					MP_PLAYERSTATSKEY_PARAGONICONID,
+					icon
+				);
+				LiveStorage_UploadStatsForController(0);
+			}
+
+			ImGui::SameLine();
+			InputIntClamped("Rank Icon##RANK", &icon, 0, maxRankIcon);
 
 			ImGui::Separator();
 
@@ -3039,175 +5759,199 @@ void draw() {
 			ImGui::Separator();
 
 			if (ImGui::Button("Send##SCORE")) {
+				ClampInt(iScore, 0, kStatMax);
 				setStatbyName("score", iScore);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Score##RANK", &iScore, 0, MAXINT / 2);
-			
+			InputIntClamped("Score##RANK", &iScore, 0, kStatMax);
 
 			if (ImGui::Button("Send##KILLS")) {
+				ClampInt(iKills, 0, kStatMax);
 				setStatbyName("kills", iKills);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Kills##RANK", &iKills, 0, MAXINT / 2);
-			
+			InputIntClamped("Kills##RANK", &iKills, 0, kStatMax);
+
 			if (ImGui::Button("Send##DEATHS")) {
+				ClampInt(iDeaths, 0, kStatMax);
 				setStatbyName("deaths", iDeaths);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Deaths##RANK", &iDeaths, 0, MAXINT / 2);
-			
+			InputIntClamped("Deaths##RANK", &iDeaths, 0, kStatMax);
+
 			if (ImGui::Button("Send##ASSISTS")) {
+				ClampInt(iAssists, 0, kStatMax);
 				setStatbyName("assists", iAssists);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Assists##RANK", &iAssists, 0, MAXINT / 2);
+			InputIntClamped("Assists##RANK", &iAssists, 0, kStatMax);
 
 			if (ImGui::Button("Send##HEADSHOTS")) {
+				ClampInt(iHeadshots, 0, kStatMax);
 				setStatbyName("headshots", iHeadshots);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Headshots##RANK", &iHeadshots, 0, MAXINT / 2);
+			InputIntClamped("Headshots##RANK", &iHeadshots, 0, kStatMax);
 
 			if (ImGui::Button("Send##TEAMKILLS")) {
+				ClampInt(iTeamKills, 0, kStatMax);
 				setStatbyName("TEAMKILLS", iTeamKills);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Teamkills##RANK", &iTeamKills, 0, MAXINT / 2);
+			InputIntClamped("Teamkills##RANK", &iTeamKills, 0, kStatMax);
 
 			if (ImGui::Button("Send##SUICIDES")) {
+				ClampInt(iSuicides, 0, kStatMax);
 				setStatbyName("SUICIDES", iSuicides);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Suicides##RANK", &iSuicides, 0, MAXINT / 2);
+			InputIntClamped("Suicides##RANK", &iSuicides, 0, kStatMax);
 
 			if (ImGui::Button("Send##TPALLIES")) {
+				ClampInt(iTimePlayedAllies, 0, kStatMax);
 				setStatbyName("TIME_PLAYED_ALLIES", iTimePlayedAllies);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Time Played (Allies)##RANK", &iTimePlayedAllies, 0, MAXINT / 2);
+			InputIntClamped("Time Played (Allies)##RANK", &iTimePlayedAllies, 0, kStatMax);
 
 			if (ImGui::Button("Send##TPOPFOR")) {
+				ClampInt(iTimePlayedOpFor, 0, kStatMax);
 				setStatbyName("TIME_PLAYED_OPFOR", iTimePlayedOpFor);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Time Played (OpFor)##RANK", &iTimePlayedOpFor, 0, MAXINT / 2);
+			InputIntClamped("Time Played (OpFor)##RANK", &iTimePlayedOpFor, 0, kStatMax);
 
 			if (ImGui::Button("Send##TPOTHER")) {
+				ClampInt(iTimePlayedOther, 0, kStatMax);
 				setStatbyName("TIME_PLAYED_OTHER", iTimePlayedOther);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Time Played (Other)##RANK", &iTimePlayedOther, 0, MAXINT / 2);
+			InputIntClamped("Time Played (Other)##RANK", &iTimePlayedOther, 0, kStatMax);
 
 			if (ImGui::Button("Send##TPTOTAL")) {
+				ClampInt(iTimePlayedTotal, 0, kStatMax);
 				setStatbyName("TIME_PLAYED_TOTAL", iTimePlayedTotal);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Time Played (Total)##RANK", &iTimePlayedTotal, 0, MAXINT / 2);
+			InputIntClamped("Time Played (Total)##RANK", &iTimePlayedTotal, 0, kStatMax);
 
 			if (ImGui::Button("Send##TOTALGAMESPLAYED")) {
+				ClampInt(iTotalGamesPlayed, 0, kStatMax);
 				setStatbyName("total_games_played", iTotalGamesPlayed);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Total Games Played##RANK", &iTotalGamesPlayed, 0, MAXINT / 2);
+			InputIntClamped("Total Games Played##RANK", &iTotalGamesPlayed, 0, kStatMax);
 
 			if (ImGui::Button("Send##KDRATIO")) {
+				ClampInt(iKD, 0, kStatMax);
 				setStatbyName("KDRATIO", iKD);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("KD Ratio##RANK", &iKD, 0, MAXINT / 2);
+			InputIntClamped("KD Ratio##RANK", &iKD, 0, kStatMax);
 
 			if (ImGui::Button("Send##WINS")) {
+				ClampInt(iWins, 0, kStatMax);
 				setStatbyName("WINS", iWins);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Wins##RANK", &iWins, 0, MAXINT / 2);
+			InputIntClamped("Wins##RANK", &iWins, 0, kStatMax);
 
 			if (ImGui::Button("Send##LOSSES")) {
+				ClampInt(iLosses, 0, kStatMax);
 				setStatbyName("LOSSES", iLosses);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Losses##RANK", &iLosses, 0, MAXINT / 2);
+			InputIntClamped("Losses##RANK", &iLosses, 0, kStatMax);
 
 			if (ImGui::Button("Send##TIES")) {
+				ClampInt(iTies, 0, kStatMax);
 				setStatbyName("TIES", iTies);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Ties##RANK", &iTies, 0, MAXINT / 2);
+			InputIntClamped("Ties##RANK", &iTies, 0, kStatMax);
 
 			if (ImGui::Button("Send##CUR_WIN_STERAK")) {
+				ClampInt(iCurWinStreak, 0, kStatMax);
 				setStatbyName("CUR_WIN_STREAK", iCurWinStreak);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Win Streak##RANK", &iCurWinStreak, 0, MAXINT / 2);
+			InputIntClamped("Win Streak##RANK", &iCurWinStreak, 0, kStatMax);
 
 			if (ImGui::Button("Send##WLRATIO")) {
+				ClampInt(iWL, 0, kStatMax);
 				setStatbyName("WLRATIO", iWL);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("WL Ratio##RANK", &iWL, 0, MAXINT / 2);
+			InputIntClamped("WL Ratio##RANK", &iWL, 0, kStatMax);
 
 			if (ImGui::Button("Send##HITS")) {
+				ClampInt(iHits, 0, kStatMax);
 				setStatbyName("HITS", iHits);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Hits##RANK", &iHits, 0, MAXINT / 2);
+			InputIntClamped("Hits##RANK", &iHits, 0, kStatMax);
 
 			if (ImGui::Button("Send##MISSES")) {
+				ClampInt(iMisses, 0, kStatMax);
 				setStatbyName("MISSES", iMisses);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Misses##RANK", &iMisses, 0, MAXINT / 2);
+			InputIntClamped("Misses##RANK", &iMisses, 0, kStatMax);
 
 			if (ImGui::Button("Send##TOTALSHOTS")) {
+				ClampInt(iTotalShots, 0, kStatMax);
 				setStatbyName("TOTAL_SHOTS", iTotalShots);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Total Shots##RANK", &iTotalShots, 0, MAXINT / 2);
+			InputIntClamped("Total Shots##RANK", &iTotalShots, 0, kStatMax);
 
 			if (ImGui::Button("Send##ACCURACY")) {
+				ClampInt(iAccuracy, 0, kStatMax);
 				setStatbyName("ACCURACY", iAccuracy);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Accuracy##RANK", &iAccuracy, 0, MAXINT / 2);
+			InputIntClamped("Accuracy##RANK", &iAccuracy, 0, kStatMax);
 
 			if (ImGui::Button("Send##HIGHESTROUND")) {
+				ClampInt(iHighestRound, 0, kStatMax);
 				setStatbyName("HIGHEST_ROUND_REACHED", iHighestRound);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Highest Round Reached##RANK", &iHighestRound, 0, MAXINT / 2);
+			InputIntClamped("Highest Round Reached##RANK", &iHighestRound, 0, kStatMax);
 
 			if (ImGui::Button("Send##TOTALROUNDSSURVIVED")) {
+				ClampInt(iTotalRounds, 0, kStatMax);
 				setStatbyName("TOTAL_ROUNDS_SURVIVED", iTotalRounds);
 				LiveStorage_UploadStatsForController(0);
 			}
 			ImGui::SameLine();
-			ImGui::SliderInt("Total Rounds Survived##RANK", &iTotalRounds, 0, MAXINT / 2);
+			InputIntClamped("Total Rounds Survived##RANK", &iTotalRounds, 0, kStatMax);
 
 			ImGui::Separator();
+		
 
 			if (ImGui::Button("Unlock All Class Slots")) {
 
@@ -3325,8 +6069,6 @@ void draw() {
 				UnlockAllAchievements();
 			}
 
-
-
 			ImGui::TextDisabled("Suggest more unlocks");
 
 			ImGui::EndChild();
@@ -3334,8 +6076,7 @@ void draw() {
 			ImGui::EndTabItem();
 		}
 
-		ImGuiTabItemFlags flags1 = (bController && tab == 1) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Zombies", nullptr, flags1)) {
+		if (ImGui::BeginTabItem("Zombies", nullptr)) {
 
 			ImGui::BeginChild("##ZOMBIES", ImGui::GetContentRegionAvail());
 
@@ -3457,6 +6198,8 @@ void draw() {
 				Dvar_SetFromString("magic_chest_movable", "0", false);
 			}
 
+			ImGui::Checkbox("Third Person##TP", &bThirdPerson);
+
 			ImGui::Checkbox("Thorns Mode##DMG", &bThorns);
 			ImGui::SameLine(0.0f, 3.0f);
 			ImGui::Checkbox("Nukes Mode##DMG", &bNukes);
@@ -3464,7 +6207,7 @@ void draw() {
 			ImGui::Checkbox("##DMG", &bDamageMultiplier);
 
 			ImGui::SameLine();
-			ImGui::SliderInt("DMG Multiplier", &iDamageMultiplier, 1, 10000);
+			ImGui::SliderInt("Damage Multiplier", &iDamageMultiplier, 1, 100000);
 
 			ImGui::Separator();
 
@@ -3591,8 +6334,7 @@ void draw() {
 
 		}
 
-		ImGuiTabItemFlags flags2 = (bController && tab == 2) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Multiplayer", nullptr, flags2)) {
+		if (ImGui::BeginTabItem("Multiplayer", nullptr)) {
 
 			ImGui::BeginChild("##MULTIPLAYER", ImGui::GetContentRegionAvail());
 			ImGui::Dummy(ImVec2(0, 5));
@@ -3604,25 +6346,11 @@ void draw() {
 
 			ImGui::SameLine();
 
-			if (ImGui::Button("Make Custom Game Earn XP")) {
-
-				if (hooks::AreWeInGameAndHosting()) {
-
-					__int64 sSessionModeState = ProcessBase + 0x1686E874;
-					*(__int32*)sSessionModeState = 129;
-					ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "XP Earned in this match will stick." });
-				}
-				else {
-					ImGui::InsertNotification({ ImGuiToastType::Error, 5000, "You must be hosting a custom game!" });
-				}
-
-			}
+			ImGui::Checkbox("Make Custom Game Earn XP", &bCustomXP);
 
 			if (ImGui::IsItemHovered()) {
 				ImGui::SetTooltip("Make sure you enable this AFTER the 10 second countdown!");
 			}
-
-			int g = 9999999999999999999;
 
 			if (ImGui::Button("Modded Lobby##GSPEED")) {
 				auto callvote = "callvote map \"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nfast_restart\nset scr_tdm_score_kill 9999999999\nscr_xpscaleMP 99999\"";
@@ -3630,7 +6358,6 @@ void draw() {
 			}			
 
 			ImGui::Separator();
-
 
 			ImGui::BulletText("Specialist Editor");
 
@@ -3740,13 +6467,20 @@ void draw() {
 			ImGui::EndTabItem();
 		}
 
-		ImGuiTabItemFlags flags3 = (bController && tab == 3) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("BlackMarket", nullptr, flags3)) {
+		if (ImGui::BeginTabItem("BlackMarket", nullptr)) {
 			ImGui::BeginChild("##BLACKMARKET", ImGui::GetContentRegionAvail());
+
+			ImGui::Dummy(ImVec2(0, 5));
+			ImGui::SeparatorText("Cryptokeys");
 			ImGui::Dummy(ImVec2(0, 5));
 
-			ImGui::SliderInt("Loot Speed (ms)", &iLootSpeed, 5, 500);
-			ImGui::SliderInt("Crypto Amount ##CRYPTOAMT", &iCryptoAmt, 0, 4950);
+			ImGui::SliderInt("Loot Speed (ms)", &iLootSpeed, 0, 500);
+
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("How long in ms should we wait to call crypto functions again.");
+			}
+
+			ImGui::SliderInt("Crypto Amount ##CRYPTOAMT", &iCryptoAmt, 0, 48);
 
 			ImGui::Checkbox("Loop Cryptokeys", &bCrypto);
 
@@ -3754,17 +6488,40 @@ void draw() {
 
 			ImGui::Checkbox("Spend Cryptokeys", &bCryptoSpend);
 
-			ImGui::SameLine(0.0f, 5.0f);
-
 			ImGui::Button("Fix Cryptokeys"); {
 				resetCrypto();
 			}
+
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Use this if your cryptokey amount always shows - after looping.");
+			}
+
+			ImGui::SameLine(0.0f, 5.0f);
+
+			if (ImGui::Button("Burn Duplicates"))
+			{
+				Loot_BurnDuplicates(0, eModes::MODE_MULTIPLAYER);
+			}
+
+			ImGui::Dummy(ImVec2(0, 5));
+			ImGui::SeparatorText("Gain Gobblegum");
+			ImGui::Dummy(ImVec2(0, 5));
 
 			ImGui::Checkbox("Loop Divinium", &bDivinium);
 
 			ImGui::SameLine(0.0f, 5.0f);
 
 			ImGui::Checkbox("Spend Divinium", &bDiviniumSpend);
+
+
+			//if (ImGui::Button("Burn Gobblegum"))
+			//{
+			//	Loot_BurnDuplicates(0, eModes::MODE_ZOMBIES);
+			//}
+
+			ImGui::Dummy(ImVec2(0, 5));
+			ImGui::SeparatorText("Misc");
+			ImGui::Dummy(ImVec2(0, 5));
 
 			if (ImGui::Button("No Dupe Supply Drops")) {
 				Dvar_SetFromString("loot_limitedTimeItemPromo_active", "1", true);
@@ -3841,8 +6598,7 @@ void draw() {
 			ImGui::EndTabItem();
 		}
 
-		ImGuiTabItemFlags flags4 = (bController && tab == 4) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Spoof", nullptr, flags4)) {
+		if (ImGui::BeginTabItem("Spoof", nullptr)) {
 			ImGui::BeginChild("##SPOOF", ImGui::GetContentRegionAvail());
 			ImGui::Dummy(ImVec2(0, 5));
 
@@ -3932,8 +6688,7 @@ void draw() {
 
 		}
 
-		ImGuiTabItemFlags flags5 = (bController && tab == 5) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Class Editor", nullptr, flags5)) {
+		if (ImGui::BeginTabItem("Class Editor", nullptr)) {
 
 			ImGui::BeginChild("##CLASSEDITORR", ImGui::GetContentRegionAvail());
 
@@ -3988,10 +6743,8 @@ void draw() {
 			ImGui::EndTabItem();
 		}
 		
-		ImGuiTabItemFlags flags6 = (bController && tab == 6) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Weapon Stats", nullptr, flags6))
+		if (ImGui::BeginTabItem("Weapon Stats", nullptr))
 		{
-
 			ImGui::BeginChild("##WEPRANKING", ImGui::GetContentRegionAvail());
 
 			ImGui::Dummy(ImVec2(0, 5));
@@ -4012,7 +6765,6 @@ void draw() {
 							previewBGBValue = itemName;
 							BgbID = i;
 						}
-
 					}
 				}
 				ImGui::EndCombo();
@@ -4027,7 +6779,7 @@ void draw() {
 			if (ImGui::Button("Set All Weapon Stats##WEPRANK"))
 			{
 				for (int i = 0; i < 256; i++) {
-					 SetWeaponStats(i);
+					SetWeaponStats(i);
 				}
 			}
 
@@ -4037,51 +6789,51 @@ void draw() {
 			ImGui::BulletText("Stat Editor");
 			ImGui::Separator();
 
-			ImGui::SliderInt("Purchased##WEP", &g_WeaponStats.purchased, 0, 3);
-			ImGui::SliderInt("XP##WEP", &g_WeaponStats.xp, 0, 665535);
-			ImGui::SliderInt("Kills##WEP", &g_WeaponStats.kills, 0, 10000000);
-			ImGui::SliderInt("Level##WEP", &g_WeaponStats.plevel, 0, 15);
-			ImGui::SliderInt("Hits##WEP", &g_WeaponStats.hits, 0, 10000000);
-			ImGui::SliderInt("Misses##WEP", &g_WeaponStats.misses, 0, 10000000);
-			ImGui::SliderInt("Accuracy##WEP", &g_WeaponStats.accuracy, 0, 100);
-			ImGui::SliderInt("Headshots##WEP", &g_WeaponStats.headshots, 0, 10000000);
-			ImGui::SliderInt("Uses##WEP", &g_WeaponStats.used, 0, 10000000);
-			ImGui::SliderInt("Assists##WEP", &g_WeaponStats.assists, 0, 100000);
-			ImGui::SliderInt("Assist Score##WEP", &g_WeaponStats.assist_score, 0, 100000);
-			ImGui::SliderInt("Challenges_tu##WEP", &g_WeaponStats.challenges_tu, 0, 100000);
-			ImGui::SliderInt("Destroyed Aircraft##WEP", &g_WeaponStats.destroyed_aircraft, 0, 100000);
-			ImGui::SliderInt("Destroyed Aircraft Under 20s##WEP", &g_WeaponStats.destroyed_aircraft_under20s, 0, 100000);
-			ImGui::SliderInt("Destroy 2 Killstreaks Rapidly", &g_WeaponStats.destroy_2_killstreaks_rapidly, 0, 100000);
-			ImGui::SliderInt("Destroy 5 Killstreak Vehicle", &g_WeaponStats.destroy_5_killstreak_vehicle, 0, 100000);
-			ImGui::SliderInt("Destroy AiTank or Setinel", &g_WeaponStats.destroy_aitank_or_setinel, 0, 100000);
-			ImGui::SliderInt("Destroy Turret", &g_WeaponStats.destroy_turret, 0, 100000);
-			ImGui::SliderInt("Direct Hit Kills", &g_WeaponStats.direct_hit_kills, 0, 100000);
-			ImGui::SliderInt("Bloodthirsty", &g_WeaponStats.killstreak_5, 0, 100000);
-			ImGui::SliderInt("Kills While Active", &g_WeaponStats.kills_while_active, 0, 100000);
-			ImGui::SliderInt("One Shots Shotgun", &g_WeaponStats.kill_enemy_one_bullet_shotgun, 0, 100000);
-			ImGui::SliderInt("One Shots Snipers", &g_WeaponStats.kill_enemy_one_bullet_sniper, 0, 100000);
-			ImGui::SliderInt("Kills While Injured", &g_WeaponStats.kill_enemy_when_injured, 0, 100000);
-			ImGui::SliderInt("Kill Enemy W Their Weapon", &g_WeaponStats.kill_enemy_with_their_weapon, 0, 100000);
-			ImGui::SliderInt("Loaded Kills", &g_WeaponStats.loadedKills, 0, 100000);
-			ImGui::SliderInt("Longshots##WEP", &g_WeaponStats.longshot_kill, 0, 100000);
-			ImGui::SliderInt("No Attachment Kills", &g_WeaponStats.noAttKills, 0, 100000);
-			ImGui::SliderInt("No Perk Kills", &g_WeaponStats.noPerkKills, 0, 100000);
-			ImGui::SliderInt("Revenge Kills##WEP", &g_WeaponStats.revenge_kill, 0, 100000);
-			ImGui::SliderInt("Blackhat Hacks##WEP", &g_WeaponStats.hacks, 0, 100000);
-			ImGui::SliderInt("EMP Destroys##WEP", &g_WeaponStats.destroyed, 0, 100000);
-			ImGui::SliderInt("Stun Kills##WEP", &g_WeaponStats.stunkills, 0, 100000);
-			ImGui::SliderInt("Blind Kills##WEP", &g_WeaponStats.blindkills, 0, 100000);
-			ImGui::SliderInt("Captures with Smoke##WEP", &g_WeaponStats.capture, 0, 100000);
-			ImGui::SliderInt("Trophy System Defends##WEP", &g_WeaponStats.projectiles, 0, 100000);
+			constexpr int kStatMax = MAXINT / 2;
+
+			InputIntClamped("Purchased##WEP", &g_WeaponStats.purchased, 0, 3);
+			InputIntClamped("XP##WEP", &g_WeaponStats.xp, 0, 665535);
+			InputIntClamped("Kills##WEP", &g_WeaponStats.kills, 0, kStatMax);
+			InputIntClamped("Level##WEP", &g_WeaponStats.plevel, 0, 15);
+			InputIntClamped("Hits##WEP", &g_WeaponStats.hits, 0, kStatMax);
+			InputIntClamped("Misses##WEP", &g_WeaponStats.misses, 0, kStatMax);
+			InputIntClamped("Accuracy##WEP", &g_WeaponStats.accuracy, 0, 100);
+			InputIntClamped("Headshots##WEP", &g_WeaponStats.headshots, 0, kStatMax);
+			InputIntClamped("Uses##WEP", &g_WeaponStats.used, 0, kStatMax);
+			InputIntClamped("Assists##WEP", &g_WeaponStats.assists, 0, kStatMax);
+			InputIntClamped("Assist Score##WEP", &g_WeaponStats.assist_score, 0, kStatMax);
+			InputIntClamped("Challenges_tu##WEP", &g_WeaponStats.challenges_tu, 0, kStatMax);
+			InputIntClamped("Destroyed Aircraft##WEP", &g_WeaponStats.destroyed_aircraft, 0, kStatMax);
+			InputIntClamped("Destroyed Aircraft Under 20s##WEP", &g_WeaponStats.destroyed_aircraft_under20s, 0, kStatMax);
+			InputIntClamped("Destroy 2 Killstreaks Rapidly##WEP", &g_WeaponStats.destroy_2_killstreaks_rapidly, 0, kStatMax);
+			InputIntClamped("Destroy 5 Killstreak Vehicle##WEP", &g_WeaponStats.destroy_5_killstreak_vehicle, 0, kStatMax);
+			InputIntClamped("Destroy AiTank or Setinel##WEP", &g_WeaponStats.destroy_aitank_or_setinel, 0, kStatMax);
+			InputIntClamped("Destroy Turret##WEP", &g_WeaponStats.destroy_turret, 0, kStatMax);
+			InputIntClamped("Direct Hit Kills##WEP", &g_WeaponStats.direct_hit_kills, 0, kStatMax);
+			InputIntClamped("Bloodthirsty##WEP", &g_WeaponStats.killstreak_5, 0, kStatMax);
+			InputIntClamped("Kills While Active##WEP", &g_WeaponStats.kills_while_active, 0, kStatMax);
+			InputIntClamped("One Shots Shotgun##WEP", &g_WeaponStats.kill_enemy_one_bullet_shotgun, 0, kStatMax);
+			InputIntClamped("One Shots Snipers##WEP", &g_WeaponStats.kill_enemy_one_bullet_sniper, 0, kStatMax);
+			InputIntClamped("Kills While Injured##WEP", &g_WeaponStats.kill_enemy_when_injured, 0, kStatMax);
+			InputIntClamped("Kill Enemy W Their Weapon##WEP", &g_WeaponStats.kill_enemy_with_their_weapon, 0, kStatMax);
+			InputIntClamped("Loaded Kills##WEP", &g_WeaponStats.loadedKills, 0, kStatMax);
+			InputIntClamped("Longshots##WEP", &g_WeaponStats.longshot_kill, 0, kStatMax);
+			InputIntClamped("No Attachment Kills##WEP", &g_WeaponStats.noAttKills, 0, kStatMax);
+			InputIntClamped("No Perk Kills##WEP", &g_WeaponStats.noPerkKills, 0, kStatMax);
+			InputIntClamped("Revenge Kills##WEP", &g_WeaponStats.revenge_kill, 0, kStatMax);
+			InputIntClamped("Blackhat Hacks##WEP", &g_WeaponStats.hacks, 0, kStatMax);
+			InputIntClamped("EMP Destroys##WEP", &g_WeaponStats.destroyed, 0, kStatMax);
+			InputIntClamped("Stun Kills##WEP", &g_WeaponStats.stunkills, 0, kStatMax);
+			InputIntClamped("Blind Kills##WEP", &g_WeaponStats.blindkills, 0, kStatMax);
+			InputIntClamped("Captures with Smoke##WEP", &g_WeaponStats.capture, 0, kStatMax);
+			InputIntClamped("Trophy System Defends##WEP", &g_WeaponStats.projectiles, 0, kStatMax);
 
 			ImGui::EndChild();
 
 			ImGui::EndTabItem();
-
 		}
 
-		ImGuiTabItemFlags flags7 = (bController && tab == 7) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Tools", nullptr, flags7)) {
+		if (ImGui::BeginTabItem("Tools", nullptr)) {
 			ImGui::BeginChild("##TOOLS", ImGui::GetContentRegionAvail());
 
 			ImGui::Dummy(ImVec2(0, 5));
@@ -4198,8 +6950,28 @@ void draw() {
 			ImGui::EndTabItem();
 		}
 
-		ImGuiTabItemFlags flags8 = (bController && tab == 8) ? ImGuiTabItemFlags_SetSelected : 0;
-		if (ImGui::BeginTabItem("Info", nullptr, flags8)) {
+		if (ImGui::BeginTabItem("Emblems", nullptr))
+		{
+			emblemsTabVisible = true;
+
+			DrawEmblemsTab();
+
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Servers", nullptr)) {
+
+			servers::draw();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Friends", nullptr)) {
+
+			players::draw();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Info", nullptr)) {
 
 			ImGui::BeginChild("##INFO", ImGui::GetContentRegionAvail());
 					
@@ -4207,28 +6979,9 @@ void draw() {
 			ImGui::InputTextWithHint("##TITLE", "Screenshot Title", &custom_title_buf);
 			ImGui::InputTextWithHint("##DESC", "Screenshot Description", &custom_desc_buf);
 
-			ImGui::Checkbox("Controller Navigation", &bController);
-			
+			//ImGui::SeparatorText("Emblem Auto Export");
 			ImGui::Dummy(ImVec2(10, 10));
-			ImGui::Text("Version: %s", SCROPTS_VERSION);
-
-			/*auto mode = Com_SessionMode_GetMode();
-			auto root = LiveStats_Core_GetRootDDLState(mode);
-			auto ctx = GetStatsBuffer(0);
-
-
-			ImGui::InputTextWithHint("##SPB", "StatPat int", &statPathBuffer);
-
-			if (ImGui::Button("Get DDL Int")) {
-				std::vector<std::string> parts = split(statPathBuffer, '/');
-
-				GetValue(parts);
-			}*/
-
-			//ImGui::SameLine();
-			//ImGui::Text("Int Result: %d", lastIntResult);
-
-		
+			ImGui::Text("Version: %s", SCROPTS_VERSION);	
 
 			ImGui::EndChild();
 			ImGui::EndTabItem();
@@ -4452,10 +7205,9 @@ void draw() {
 
 	else {
 		*(int*)((DWORD64)GetModuleHandleA(NULL) + 0x17DF0405) = 1;
+
 	}
 }
-
-bool init = false;
 
 void MergeIconsWithLatestFont(float font_size, bool FontDataOwnedByAtlas = false)
 {
@@ -4469,190 +7221,146 @@ void MergeIconsWithLatestFont(float font_size, bool FontDataOwnedByAtlas = false
 	ImGui::GetIO().Fonts->AddFontFromMemoryTTF((void*)fa_solid_900, sizeof(fa_solid_900), font_size, &icons_config, icons_ranges);
 }
 
-const char* tabs[] =
+void CleanupRenderTarget()
 {
-	"Account",
-	"Zombies",
-	"Multiplayer",
-	"BlackMarket",
-	"Spoof",
-	"Class Editor",
-	"Weapon Stats",
-	"Tools",
-	"Info"
-};
+	if (pContext)
+	{
+		pContext->OMSetRenderTargets(0, nullptr, nullptr);
+	}
 
-bool IsControllerActive()
+	if (mainRenderTargetView)
+	{
+		mainRenderTargetView->Release();
+		mainRenderTargetView = nullptr;
+	}
+
+	renderTargetReady = false;
+}
+
+bool CreateRenderTarget(IDXGISwapChain* swapChain)
 {
-	XINPUT_STATE state{};
-	if (XInputGetState(0, &state) != ERROR_SUCCESS)
+	if (!swapChain || !pDevice)
 		return false;
 
-	const auto& g = state.Gamepad;
+	ID3D11Texture2D* pBackBuffer = nullptr;
 
-	// Buttons
-	/*if (g.wButtons != 0)
-		return true;*/
+	HRESULT hr = swapChain->GetBuffer(
+		0,
+		__uuidof(ID3D11Texture2D),
+		reinterpret_cast<void**>(&pBackBuffer)
+	);
 
-	// Bumpers
-	if (g.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER || g.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER)
-		return true;
-
-	// Sticks
-	/*if (abs(g.sThumbLX) > 8000 || abs(g.sThumbLY) > 8000 ||
-		abs(g.sThumbRX) > 8000 || abs(g.sThumbRY) > 8000)
-		return true;*/
-
-	return false;
-}
-
-float lastControllerTime = 0.0f;
-
-void UpdateInputMode()
-{
-	ImGuiIO& io = ImGui::GetIO();
-
-	if (IsControllerActive())
-	{
-
-		bController = true;
-		lastControllerTime = (float)ImGui::GetTime();
-	}
-
-	// Stay in controller mode for 2 seconds after last input
-	if ((ImGui::GetTime() - lastControllerTime) > 0.20f)
-	{
-		bController = false;
-	}
-}
-
-void UpdateController(bool open)
-{
-	if (!open)
-		return;
-
-	XINPUT_STATE state{};
-	if (XInputGetState(0, &state) != ERROR_SUCCESS)
-		return;
-
-	ImGuiIO& io = ImGui::GetIO();
-
-	const float deadzone = 8000.0f;
-	float lx = (float)state.Gamepad.sThumbLX;
-	float ly = (float)state.Gamepad.sThumbLY;
-	float ry = (float)state.Gamepad.sThumbRY;
-	bool lb = state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER;
-	bool rb = state.Gamepad.wButtons & XINPUT_GAMEPAD_RIGHT_SHOULDER;
-
-	// Deadzone
-	if (fabs(lx) < deadzone) lx = 0.0f;
-	if (fabs(ly) < deadzone) ly = 0.0f;
-	if (fabs(ry) < deadzone) ry = 0.0f;
-
-
-	// Normalize [-1,1]
-	lx /= 32767.0f;
-	ly /= 32767.0f;
-	ry /= 32767.0f;
-
-	float mag = sqrtf(lx * lx + ly * ly);
-	if (mag > 1.0f) mag = 1.0f;
-	float accel = mag * mag;
-
-	float speed = 10.0f;
-
-	float scroll = ry * fabs(ry); // quadratic
-	io.MouseWheel += scroll * 0.5f;
-
-	io.MousePos.x += lx * speed * accel;
-	io.MousePos.y -= ly * speed * accel;
-
-	// Clamp to screen
-	io.MousePos.x = ImClamp(io.MousePos.x, 0.0f, io.DisplaySize.x);
-	io.MousePos.y = ImClamp(io.MousePos.y, 0.0f, io.DisplaySize.y);
-
-	// Buttons (example)
-	io.MouseDown[0] = (state.Gamepad.wButtons & XINPUT_GAMEPAD_A) != 0; // left click
-	//io.MouseDown[1] = (state.Gamepad.wButtons & XINPUT_GAMEPAD_LEFT_SHOULDER) != 0;  // right click
-	if (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow))
-	{
-		io.MouseWheel += ry * 0.5f;
-	}
-	// invert if needed (stick up = scroll up usually)
-
-	static bool prevLB = false;
-	static bool prevRB = false;
-
-	if (rb && !prevRB)
-		tab = (tab + 1) % tabCount;
-
-	if (lb && !prevLB)
-		tab = (tab - 1 + tabCount) % tabCount;
-
-	prevLB = lb;
-	prevRB = rb;
-
-}
-
-bool IsStartPressed()
-{
-	XINPUT_STATE state{};
-	if (XInputGetState(0, &state) != ERROR_SUCCESS)
+	if (FAILED(hr) || !pBackBuffer)
 		return false;
 
-	bool l2Pressed = state.Gamepad.bLeftTrigger > 30;
-	bool xPressed = (state.Gamepad.wButtons & XINPUT_GAMEPAD_X);
+	hr = pDevice->CreateRenderTargetView(
+		pBackBuffer,
+		nullptr,
+		&mainRenderTargetView
+	);
 
-	return l2Pressed && xPressed;
+	pBackBuffer->Release();
+
+	renderTargetReady = SUCCEEDED(hr) && mainRenderTargetView;
+	return renderTargetReady;
+}
+
+HRESULT __stdcall hkResizeBuffers(
+	IDXGISwapChain* pSwapChain,
+	UINT BufferCount,
+	UINT Width,
+	UINT Height,
+	DXGI_FORMAT NewFormat,
+	UINT SwapChainFlags)
+{
+	CleanupRenderTarget();
+
+	if (ImGui::GetCurrentContext())
+	{
+		ImGui_ImplDX11_InvalidateDeviceObjects();
+	}
+
+	HRESULT hr = oResizeBuffers(
+		pSwapChain,
+		BufferCount,
+		Width,
+		Height,
+		NewFormat,
+		SwapChainFlags
+	);
+
+	if (SUCCEEDED(hr))
+	{
+		DXGI_SWAP_CHAIN_DESC sd{};
+		if (SUCCEEDED(pSwapChain->GetDesc(&sd)))
+		{
+			window = sd.OutputWindow;
+		}
+
+		if (ImGui::GetCurrentContext())
+		{
+			ImGui_ImplDX11_CreateDeviceObjects();
+		}
+
+		CreateRenderTarget(pSwapChain);
+	}
+
+	return hr;
 }
 
 HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT Flags)
 {
 	if (!init)
 	{
-		if (SUCCEEDED(pSwapChain->GetDevice(__uuidof(ID3D11Device), (void**)& pDevice)))
+		if (FAILED(pSwapChain->GetDevice(__uuidof(ID3D11Device), reinterpret_cast<void**>(&pDevice))))
 		{
-			pDevice->GetImmediateContext(&pContext);
-			DXGI_SWAP_CHAIN_DESC sd;
-			pSwapChain->GetDesc(&sd);
-			window = sd.OutputWindow;
-			ID3D11Texture2D* pBackBuffer;
-			pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)& pBackBuffer);
-			pDevice->CreateRenderTargetView(pBackBuffer, NULL, &mainRenderTargetView);
-			pBackBuffer->Release();
-			oWndProc = (WNDPROC)SetWindowLongPtr(window, GWLP_WNDPROC, (LONG_PTR)WndProc);
-			InitImGui();
-			MergeIconsWithLatestFont(16.0f, false);
-			init = true;
+			return oPresent(pSwapChain, SyncInterval, Flags);
 		}
 
-		else
-			return decltype(&hkPresent)(oPresent)(pSwapChain, SyncInterval, Flags);
+		pDevice->GetImmediateContext(&pContext);
+
+		gSwapChain = pSwapChain;
+		gSwapChain->AddRef();
+
+		DXGI_SWAP_CHAIN_DESC sd{};
+		pSwapChain->GetDesc(&sd);
+		window = sd.OutputWindow;
+
+		CreateRenderTarget(pSwapChain);
+
+		oWndProc = reinterpret_cast<WNDPROC>(
+			SetWindowLongPtr(window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(WndProc))
+			);
+
+		InitImGui();
+		MergeIconsWithLatestFont(16.0f, false);
+
+		init = true;
 	}
 
-  static bool openKeyWasDown = false;
-  bool openKeyIsDown = (GetAsyncKeyState(OpenKeybind) & 0x8000) != 0;
-  if (openKeyIsDown && !openKeyWasDown)
-  {
-      open = !open;
-  }
-  openKeyWasDown = openKeyIsDown;
+	if (!mainRenderTargetView)
+	{
+		CreateRenderTarget(pSwapChain);
+	}
 
-	static bool prev = false;
-
-	bool curr = IsStartPressed();
-
-	if (curr && !prev)
+	static bool openKeyWasDown = false;
+	bool openKeyIsDown = (GetAsyncKeyState(OpenKeybind) & 0x8000) != 0;
+	if (openKeyIsDown && !openKeyWasDown)
 	{
 		open = !open;
 	}
+	openKeyWasDown = openKeyIsDown;
 
-	prev = curr;
+	EmblemPreview::UpdateReleaseGuards(open);
 
 	hooks::onFrame();
 
-	if (bDivinium) {
-		if (clock() - UnlockTMR > iLootSpeed) {
+	EmblemPreview::Update();
+
+	if (bDivinium)
+	{
+		if (clock() - UnlockTMR > iLootSpeed)
+		{
 			char buf_cmd[255];
 			sprintf_s(buf_cmd, "%c %u %u", 120, 3, 250);
 			SV_GameSendServerCommand(0, 1, buf_cmd);
@@ -4660,62 +7368,71 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 		}
 	}
 
-	if (bCrypto) {
-		if (clock() - UnlockTMR > iLootSpeed) {
-			GiveLootToSelf(0, 1, iCryptoAmt);
+	if (bCrypto)
+	{
+		if (clock() - UnlockTMR > iLootSpeed)
+		{
+			GiveLootToSelf(0, 1, iCryptoAmt * 100);
 			UnlockTMR = clock();
 		}
 	}
 
-	if (bCryptoSpend) {
-		if (bCrypto) {
-			bCrypto = false;
-		}
-
+	if (bCryptoSpend)
+	{
+		bCrypto = false;
+		bSpoofBlackMarket = false;
 		Loot_BuyCrate(0, 1, 2);
-
 	}
 
-	if (bDiviniumSpend) {
-		if (bDivinium) {
-			bDivinium = false;
+	if (bDiviniumSpend)
+	{
+		bDivinium = false;
+		bSpoofBlackMarket = false;
+		Loot_SpendVials(0, 3);
+	}
+
+	if (mainRenderTargetView)
+	{
+		ImGui_ImplDX11_NewFrame();
+		ImGui_ImplWin32_NewFrame();
+		ImGui::NewFrame();
+
+		const bool menuOpenBeforeDraw = open;
+
+		draw();
+		drawTracers();
+		
+		if (bNotifications)
+		{
+			ImGui::RenderNotifications();
 		}
 
-		Loot_SpendVials(0, 3);
+		ImGui::Render();
 
+		pContext->OMSetRenderTargets(1, &mainRenderTargetView, nullptr);
+		ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 	}
 
-	Dvar_SetFromString("loot_loginReward_active", "1", 1);
-
-	ImGui::GetIO().MouseDrawCursor = open;
-
-	ImGui_ImplDX11_NewFrame();
-	ImGui_ImplWin32_NewFrame();
-	UpdateController(open);
-	UpdateInputMode();
-	ImGui::NewFrame();
-
-	draw();
-	drawTracers();
-
-	if (bNotifications) {
-		ImGui::RenderNotifications();
-	}
-
-	ImGui::Render();
-
-	pContext->OMSetRenderTargets(1, &mainRenderTargetView, NULL);
-	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-	return decltype(&hkPresent)(oPresent)(pSwapChain, SyncInterval, Flags);
+	return oPresent(pSwapChain, SyncInterval, Flags);
 }
 
-HookReturn initDirectXPresentPointerSwap() {
-	__int64 DirectXVtableThing = **(__int64**)(ProcessBase + 0xF4378D8); // 48 89 84 24 ? ? ? ? 48 8B 0D ? ? ? ? 0x1c40000
-	oPresent = (void*)(*(__int64*)(DirectXVtableThing + 0x40)); // E0 0E 41 89 FF 7F 00 00
-	DWORD old;
-	VirtualProtect((LPVOID)(DirectXVtableThing + 0x40), 8, PAGE_EXECUTE_READWRITE, &old);
-	*(__int64*)(DirectXVtableThing + 0x40) = (__int64)hkPresent;
-	VirtualProtect((LPVOID)(DirectXVtableThing + 0x40), 8, old, &old);
+HookReturn initDirectXPresentPointerSwap()
+{
+	auto swapChainVtable = **reinterpret_cast<uintptr_t***>(ProcessBase + 0xF4378D8);
+
+	DWORD oldProtect = 0;
+
+	oPresent = reinterpret_cast<Present_t>(swapChainVtable[8]);
+
+	VirtualProtect(&swapChainVtable[8], sizeof(uintptr_t), PAGE_EXECUTE_READWRITE, &oldProtect);
+	swapChainVtable[8] = reinterpret_cast<uintptr_t>(hkPresent);
+	VirtualProtect(&swapChainVtable[8], sizeof(uintptr_t), oldProtect, &oldProtect);
+
+	oResizeBuffers = reinterpret_cast<ResizeBuffers_t>(swapChainVtable[13]);
+
+	VirtualProtect(&swapChainVtable[13], sizeof(uintptr_t), PAGE_EXECUTE_READWRITE, &oldProtect);
+	swapChainVtable[13] = reinterpret_cast<uintptr_t>(hkResizeBuffers);
+	VirtualProtect(&swapChainVtable[13], sizeof(uintptr_t), oldProtect, &oldProtect);
 
 	return Success;
 }
@@ -4727,20 +7444,22 @@ BOOL WINAPI DllMain(HMODULE hMod, DWORD dwReason, LPVOID lpReserved)
 	case DLL_PROCESS_ATTACH:
 		DWORD old;
 		dllbase = hMod;
+
 		MH_Initialize();
 		initDirectXPresentPointerSwap();
 		hooks::initExceptionHandler();
 		hooks::initPointerSwaps();
 
-		
 		break;
+
 	case DLL_PROCESS_DETACH:
-		
 		break;
 	}
+
 	return TRUE;
 }
 
 /* TODO
 * - Clean up the menu, improve GUI code in general, add more tooltips and notifications, etc. Maybe phantom UI?
+* - Add aimbot (smooth, snap), walls, rapid fire, auto fire, infinite ammo, no recoil, etc.
 */

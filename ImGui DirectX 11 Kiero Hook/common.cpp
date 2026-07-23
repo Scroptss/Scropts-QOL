@@ -73,12 +73,17 @@ bool bGodModeRan;
 bool bInfAmmo;
 bool bInfAmmoRan;
 bool bThorns;
+bool bThirdPerson;
+bool bCustomXP;
+bool bTpRan;
 bool bNukes;
 bool bDamageMultiplier;
 bool bTracers;
 bool bAllTracers;
-bool bModTools = true;
+bool bModTools;
+bool open = true;
 
+int iSelectedResolutionTier = static_cast<int>(ResolutionTier::Best);
 int iBlackmarketAmt = 999;
 int iBribe;
 int iComboBoxType = 0;
@@ -97,6 +102,7 @@ ImColor mainRgb()
 	const ImVec4 color = ImColor::HSV(hue, 0.7f, 0.7f);
 	return color;
 }
+
 
 std::uintptr_t ProcessBase = reinterpret_cast<std::uintptr_t>(GetModuleHandleA(nullptr));
 std::string nameBuffer = "";
@@ -117,13 +123,12 @@ DDL_MoveToNameT DDL_MoveToName = (DDL_MoveToNameT)(ProcessBase + 0x24A99B0);
 DDL_MoveToPathT DDL_MoveToPath = (DDL_MoveToPathT)(ProcessBase + 0x24A99C0);
 DDL_Lookup_MoveToNameT DDL_Lookup_MoveToName = (DDL_Lookup_MoveToNameT)(ProcessBase + 0x1427A20);
 DDL_SetUIntT DDL_SetUInt = (DDL_SetUIntT)(ProcessBase + 0x24A9EC0);
-DDL_GetUIntT DDL_GetUInt = (DDL_GetUIntT)(ProcessBase + 0x24A9480);
 DDL_SetIntT DDL_SetInt = (DDL_SetUIntT)(ProcessBase + 0x24A9CC0);
 DDL_SetStringT DDL_SetString = (DDL_SetStringT)(ProcessBase + 0x24A9D40);
 LiveStorage_UploadStatsForControllerT LiveStorage_UploadStatsForController = (LiveStorage_UploadStatsForControllerT)(ProcessBase + 0x1EB4960);
 LiveStats_SetShowcaseWeaponT LiveStats_SetShowcaseWeapon = (LiveStats_SetShowcaseWeaponT)(ProcessBase + 0x1EA0DD0);
 LiveStats_SetCharacterHeadIndexT LiveStats_SetCharacterHeadIndex = (LiveStats_SetCharacterHeadIndexT)(ProcessBase + 0x1EA09A0);
-lergstuffT lergstuff = (lergstuffT)(ProcessBase + 0x1C4D70);
+CG_GetLocalClientGlobalsForEnt_T CG_GetLocalClientGlobalsForEnt = (CG_GetLocalClientGlobalsForEnt_T)(ProcessBase + 0x1C4D70);
 send_p2p_packet_t send_p2p_packet = reinterpret_cast<send_p2p_packet_t>(OFFSET(0x1EA3DF0));
 LootT GiveLootToSelf = (LootT)(ProcessBase + 0x1E76880);
 GameSendServerCommandT SV_GameSendServerCommand = (GameSendServerCommandT)(ProcessBase + 0x21F3110);
@@ -262,6 +267,21 @@ const char* offhandMenuNames[] = {
 const char* cpmapnames[] = { "cp_mi_eth_prologue", "cp_mi_zurich_newworld", "cp_mi_sing_blackstation",
 "cp_mi_sing_biodomes", "cp_mi_sing_sgen", "cp_mi_sing_vengeance", "cp_mi_cairo_ramses", "cp_mi_cairo_infection",
 "cp_mi_cairo_aquifer", "cp_mi_cairo_lotus","cp_mi_zurich_coalescence" };
+
+const char* levels[] =
+{
+    "angola",
+    "myanmar",
+    "afghanistan",
+    "nicaragua",
+    "pakistan",
+    "karma",
+    "panama",
+    "yemen",
+    "blackout",
+    "la",
+    "haiti"
+};
 
 const char* zmmapnames[] = { "zm_zod", "zm_factory", "zm_castle", "zm_island", "zm_stalingrad", "zm_genesis", "zm_asylum", "zm_cosmodrome", "zm_moon", "zm_prototype",
 "zm_sumpf", "zm_theater", "zm_temple", "zm_tomb" };

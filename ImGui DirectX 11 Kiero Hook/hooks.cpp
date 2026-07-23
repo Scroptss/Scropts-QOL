@@ -1,4 +1,6 @@
 #include "hooks.h"
+#include "servers.h"
+#include "players.h"
 #include "crc.h"
 
 namespace hooks {
@@ -46,7 +48,6 @@ namespace hooks {
 		{ 0x1EA5669 },
 		{ 0x1EBF6CD },
 		{ 0x20EAD5D },
-		{ 0x1FC6769 },
 	};
 
 	uintptr_t GetCallsiteFromReturn(void* returnAddress)
@@ -194,7 +195,69 @@ namespace hooks {
 
 	namespace functions {
 
-		// Patches
+
+		GfxImage* hkR_CodeImage_Create(
+			int width,
+			int height,
+			int imageFormat,
+			int flags,
+			const char* name)
+		{
+			const auto ret = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+			
+
+			if (ret == OFFSET(0x1336080))
+			{
+				int overrideWidth = width;
+				int overrideHeight = height;
+
+				switch (iSelectedResolutionTier)
+				{
+				case 0:
+					overrideWidth = 300;
+					overrideHeight = 184;
+					break;
+				case 1:
+					overrideWidth = 600;
+					overrideHeight = 368;
+					break;
+				case 2:
+					overrideWidth = 1200;
+					overrideHeight = 736;
+					break;
+				case 3:
+					overrideWidth = 2400;
+					overrideHeight = 1472;
+					break;
+				}
+				return R_CodeImage_Create(overrideWidth, overrideHeight, imageFormat, flags, name);
+			}
+
+			return R_CodeImage_Create(width, height, imageFormat, flags, name);
+		}
+
+		bool hkBG_UnlockablesItemOptionLocked(eModes mode, int controllerIndex, int itemIndex, int optionIndex)
+		{
+			if (bSpoofBlackMarket)
+			{
+				return false;
+			}
+
+			return BG_UnlockablesItemOptionLocked(mode, controllerIndex, itemIndex, optionIndex);
+		}
+
+		bool hkCom_SessionMode_IsOnlineGame() {
+
+			if (bCustomXP)
+			{
+				if (hooks::AreWeInGameAndHosting()) {
+					*(__int32*)OFFSET(0x1686E874) = 129;
+				}
+				return true;
+			}
+
+			return Com_SessionMode_IsOnlineGame();
+		}
 
 		char hkMods_IsModsLoaded()
 		{
@@ -263,7 +326,7 @@ namespace hooks {
 				va_end(args);
 
 				snprintf(buffer, sizeof(buffer),
-					"^1DLC SPOOF ERROR: ^7%s\n\n^7Cannot load DLC files, Have you downloaded ^2%s's ^7files and placed them in your Zone Folder?\n\n ^8C:\\Program Files (x86)\\Steam\\steamapps\\common\\Call of Duty Black Ops III\\zone",
+					"^1DLC SPOOF ERROR: ^7%s\n\n^7Cannot load DLC files, Scropts QOL does not automatically install DLC files.\n Have you downloaded ^2%s's ^7files and placed them in your Zone Folder?\n\n ^8C:\\Program Files (x86)\\Steam\\steamapps\\common\\Call of Duty Black Ops III\\zone",
 					error ? error : "null",				
 				mapName ? mapName : "null");
 
@@ -309,17 +372,25 @@ namespace hooks {
 			return CL_GetConfigString(configStringIndex);
 		}
 
-		bool hkCL_ConnectionlessCMD(int clientNum, netadr_t* from, msg_t* msg) {
+		bool hkCL_ConnectionlessCMD(int clientNum, netadr_t* from, msg_t* msg)
+		{
+			if (!from || !msg)
+				return 0;
 
 			auto v7 = *(int**)(Sys_GetTLS() + 24);
+			if (!v7)
+				return 0;
+
 			auto v8 = *v7;
-			auto message = **(CHAR***)&v7[2 * v8 + 34];			
-		
-			if (utils::is_in_array(message, legit_packets)) {
+			auto message = **(char***)&v7[2 * v8 + 34];
+
+			if (!message || !*message)
+				return 0;
+
+			if (utils::is_in_array(message, legit_packets))
 				return CL_ConnectionlessCMD(clientNum, from, msg);
-			}
-			ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "Invalid OOB recieved: %s", message});
-			return 1;
+
+			return true;
 		}
 
 		bool hkLobbyMsgRW_PackageElement(LobbyMsg* lobbyMsg, bool addElement) {
@@ -396,8 +467,8 @@ namespace hooks {
 		bool HandleMessage(const unsigned __int64 sender_id, const char* sender_name, const char* message, const unsigned int message_size) {
 
 			msg_t msg{};
-			MSG_BeginReading(&msg);
 			MSG_InitReadOnly(&msg, message, message_size);
+			MSG_BeginReading(&msg);
 
 			auto type{ 0ui8 };
 
@@ -470,6 +541,11 @@ namespace hooks {
 
 							if (!MSG_InfoResponse(&response, &lobby_msg))
 								return;
+
+							players::OnInfoResponse(
+								sender_id,
+								response
+							);
 
 						};
 
@@ -554,6 +630,7 @@ namespace hooks {
 
 		}
 
+		// Make options for all return addrs
 		void hkR_ConvertColorToBytes(ImVec4* color, byte* bytes) {
 
 			auto desiredColor = bUIRgb ? (ImVec4)mainRgb() : (ImVec4)uiColor;
@@ -567,22 +644,10 @@ namespace hooks {
 			if (bColoredUI && returnAddress != nullptr) {
 
 				if (returnAddress == (void*)(ProcessBase + 0x1F28963) || returnAddress == (void*)(ProcessBase + 0x1CCDD8C) || returnAddress == (void*)(ProcessBase + 0x279C317)
-					|| returnAddress == (void*)(ProcessBase + 0x1CCCED7) || returnAddress == LPVOID(ProcessBase + 0x134DA0F) ) {
+					|| returnAddress == (void*)(ProcessBase + 0x1CCCED7) || returnAddress == LPVOID(ProcessBase + 0x134DA0F)) {
 
-					float brightness = 0.299f * color->x + 0.587f * color->y + 0.114f * color->z;
+					return R_ConvertColorToBytes(&desiredColor, bytes);
 
-					if (brightness > 0.7f) {
-						return R_ConvertColorToBytes(&desiredColor, bytes);
-					}
-
-					auto darkDesired = ImVec4(
-						desiredColor.x * 0.1f,
-						desiredColor.y * 0.1f,
-						desiredColor.z * 0.1f,
-						desiredColor.w
-					);
-
-					return R_ConvertColorToBytes(&darkDesired, bytes);
 				}
 
 			}
@@ -655,8 +720,6 @@ namespace hooks {
 		}
 
 		bool hkLiveInventory_IsValid(ControllerIndex_t controllerIndex) {
-
-
 
 			return true;
 		}
@@ -1002,10 +1065,94 @@ namespace hooks {
 
 		}
 
+		inline int* Game_ShowMouse()
+		{
+			return reinterpret_cast<int*>(OFFSET(0x1795D25C));
+		}
+
+		inline int* Game_SystemCursorMode()
+		{
+			return reinterpret_cast<int*>(OFFSET(0x17DF03D8));
+		}
+
+		inline int* Game_CursorType()
+		{
+			return reinterpret_cast<int*>(OFFSET(0x1795D258));
+		}
+
+		inline HCURSOR GetBO3Cursor()
+		{
+			static HCURSOR cursor = nullptr;
+
+			if (!cursor)
+			{
+				cursor = LoadCursorA(
+					GetModuleHandleA(nullptr),
+					MAKEINTRESOURCEA(131)
+				);
+			}
+
+			return cursor;
+		}
+
+		void SetBO3Cursor()
+		{
+			if (HCURSOR cursor = GetBO3Cursor())
+				SetCursor(cursor);
+		}
+
+		void ForceBO3MenuCursor(bool menuOpen)
+		{
+			static bool saved = false;
+			static int oldSystemCursorMode = 0;
+			static int oldCursorType = 0;
+
+			if (menuOpen)
+			{
+				if (!saved)
+				{
+					oldSystemCursorMode = *Game_SystemCursorMode();
+					oldCursorType = *Game_CursorType();
+					saved = true;
+				}
+
+				*Game_ShowMouse() = 1;
+				*Game_SystemCursorMode() = 0;
+				*Game_CursorType() = 0;
+
+				if (window)
+					PostMessageA(window, WM_SETCURSOR, reinterpret_cast<WPARAM>(window), 1);
+
+				return;
+			}
+
+			if (saved)
+			{
+				*Game_SystemCursorMode() = oldSystemCursorMode;
+				*Game_CursorType() = oldCursorType;
+				saved = false;
+
+				if (window)
+					PostMessageA(window, WM_SETCURSOR, reinterpret_cast<WPARAM>(window), 1);
+			}
+		}
+
+		int __fastcall hkShouldShowMouse(unsigned int controllerIndex)
+		{
+			if (open)
+			{
+				ForceBO3MenuCursor(true);
+				SetBO3Cursor();
+				return 1;
+			}
+
+			ForceBO3MenuCursor(false);
+			return ShouldShowMouse(controllerIndex);
+		}
 	}
 
 	__int64 GetCGArray(int a1, int a2) {
-		return spoof_call(spoof_t, lergstuff, a1, a2);
+		return spoof_call(spoof_t, CG_GetLocalClientGlobalsForEnt, a1, a2);
 	}
 
 	void initPointers() {
@@ -1125,8 +1272,14 @@ namespace hooks {
 
 	void applyPatches() {
 
+		PatchPrecomputed();
+
+		MH_CreateHook((LPVOID)(ProcessBase + 0x1C81370), functions::hkR_CodeImage_Create, (LPVOID*)&R_CodeImage_Create);
+		MH_CreateHook((LPVOID)(ProcessBase + 0x2631C10), functions::hkBG_UnlockablesItemOptionLocked, (LPVOID*)&BG_UnlockablesItemOptionLocked);
+		MH_CreateHook((LPVOID)(ProcessBase + 0x20EB2F0), functions::hkCom_SessionMode_IsOnlineGame, (LPVOID*)&Com_SessionMode_IsOnlineGame);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x20C8F60), functions::hkMods_IsModsLoaded, (LPVOID*)&Mods_IsModsLoaded);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x20C9AE0), functions::hkMods_IsModsLoaded_1, (LPVOID*)&Mods_IsModsLoaded_1);
+		//MH_CreateHook((LPVOID)(ProcessBase + 0x1FC6760), functions::hkLua_IsModsLoaded, (LPVOID*)&Lua_IsModsLoaded);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x22C9650), functions::hkflsomeWeirdCharacterIndex, (LPVOID*)&flsomeWeirdCharacterIndex);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1EAAD60), functions::hkUserHasLicenseForApp, (LPVOID*)&UserHasLicenseForApp);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1321130), functions::hkCL_GetConfigString, (LPVOID*)&CL_GetConfigString);
@@ -1150,6 +1303,7 @@ namespace hooks {
 		MH_CreateHook((LPVOID)(ProcessBase + 0x143A620), functions::hkdwInstantDispatchMessage, (LPVOID*)&dwInstantDispatchMessage);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1DFDFE0), functions::hkLiveInventory_IsValid, (LPVOID*)&LiveInventory_IsValid);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x20EC0B0), functions::hkCom_Error, (LPVOID*)&Com_Error);
+		MH_CreateHook((LPVOID)(ProcessBase + 0x2230B50), functions::hkShouldShowMouse, (LPVOID*)&ShouldShowMouse);
 
 		MH_EnableHook(MH_ALL_HOOKS);
 
@@ -1159,31 +1313,35 @@ namespace hooks {
 
 	void restorePatches() {
 
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x20C8F60));		//Mods_IsModsLoaded
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x20C9AE0));		//Mods_IsModsLoaded_1
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x22C9650));		//flsomeWeirdCharacterIndex
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1C81370));		//R_CodeImage_Create
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x2631C10));		//BG_UnlockablesItemOptionLocked
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x20EB2F0));		//hkCom_SessionMode_IsOnlineGame
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x20C8F60));		//hkMods_IsModsLoaded
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x20C9AE0));		//hkMods_IsModsLoaded_1
+		//MH_RemoveHook((LPVOID)(ProcessBase + 0x1FC6760));		//hkLua_IsModsLoaded
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x22C9650));		//hkflsomeWeirdCharacterIndex
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EAAD60));		//hkUserHasLicenseForApp
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1321130));		//hkCL_GetConfigString
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980980));		//G_Damage
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x60F920));		//CG_Draw2D
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1189E10));		//CG_BulletHitEvent_Internal
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1980980));		//hkG_Damage
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x60F920));		//hkCG_Draw2D
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1189E10));		//hkCG_BulletHitEvent_Internal
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1D10840));		//hkR_ConvertColorToBytes
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x268CC60));		//hkUI_IsRenderingImmediately
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFCC60));		//hkLiveInventory_GetItemQuantity
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E06110));		//hkLiveEntitlements_IsEntitlementActiveForController
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFC580));		//hkLiveInventory_AreExtraSlotsPurchased
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EBB200));		//hkLive_UserGetName
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591590));		//Demo_SetMetaData	
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591050));		//Demo_SaveScreenshotToContentServer
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591590));		//hkDemo_SetMetaData	
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x2591050));		//hkDemo_SaveScreenshotToContentServer
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DE9E10));		//hkFileshare_GetSummaryFileAuthorXUID
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E7B060));		//hkFileshare_CanDownloadFile
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x134CD70));		//hkCL_ConnectionlessCMD
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1F28860));		//UI_Interface_DrawText
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E85450));		//LivePresence_Serialize
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1F28860));		//hkUI_Interface_DrawText
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1E85450));		//hkLivePresence_Serialize
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1EEA320));		//hkLobbyMsgRW_PackageElement
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x143A620));		//dwInstantDispatchMessage
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFDFE0));		//LiveInventory_IsValid
-		MH_RemoveHook((LPVOID)(ProcessBase + 0x20EC0B0));		//Com_Error	
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x143A620));		//hkdwInstantDispatchMessage
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x1DFDFE0));		//hkLiveInventory_IsValid
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x20EC0B0));		//hkCom_Error	
 		MH_DisableHook(MH_ALL_HOOKS);
 
 	}
@@ -1198,10 +1356,43 @@ namespace hooks {
 		if (!crc_enabled && *(__int64*)(ProcessBase + 0x1686E948)) {
 			PatchPrecomputed();
 			crc_enabled = true;
-			ImGui::InsertNotification({ ImGuiToastType::Success, 3000, "CRC Disabled" });
+
+			initialize_dispatch();
+			applyPatches();
+			servers::Install();
+			dispatch_enabled = true;
+			ImGui::InsertNotification({ ImGuiToastType::Success, 3000, "Patches Enabled" });
 		}
 
 		if (is_match_loaded()) {
+
+			if (cgArray > 0) {
+				if (bThirdPerson && bTpRan == false)
+				{
+					*(int*)(cgArray + 0x11A8A8) = 1;
+					*(int*)(cgArray + 0x11A96C) = 1;
+					*(int*)(cgArray + 0x2E0E42) = 1;
+					bTpRan = true;
+				}
+
+				if (bThirdPerson == false && bTpRan == true)
+				{
+					*(int*)(cgArray + 0x11A8A8) = 0;
+					*(int*)(cgArray + 0x11A96C) = 0;
+					*(int*)(cgArray + 0x2E0E42) = 0;
+					bTpRan = false;
+				}
+
+				if (bThirdPerson && CG_GetCGArray()->predictedPlayerState.otherFlags & 0x4) {
+					if (*(int*)(cgArray + 0x11A8A8) == 0) {
+						*(int*)(cgArray + 0x11A8A8) = 1;
+						*(int*)(cgArray + 0x11A96C) = 1;
+						*(int*)(cgArray + 0x2E0E42) = 1;
+					}
+				}
+			}
+
+
 			if (!inGameBoolean) {
 				// Enable hooks
 				//tracers.clear();
@@ -1235,17 +1426,11 @@ namespace hooks {
 			Dvar_SetFromString("groupUploadInterval", "1", true);
 
 
+			Dvar_SetFromString("loot_loginReward_active", "1", 1);
+
 		}
 
 
-		if (!dispatch_enabled && Live_IsUserSignedInToDemonware(CONTROLLER_INDEX_0))
-		{
-			initialize_dispatch();
-			
-			applyPatches();
-			dispatch_enabled = true;
-			ImGui::InsertNotification({ ImGuiToastType::Success, 3000, "Patches Enabled" });
-		}
 	}
 
 	void catch_exception(LPEXCEPTION_RECORD ExceptionRecord, LPCONTEXT ContextRecord)
@@ -1317,42 +1502,34 @@ namespace hooks {
 	
 	LONG CALLBACK hookHandler(LPEXCEPTION_POINTERS ex)
 	{
+		if (!ex || !ex->ExceptionRecord || !ex->ContextRecord)
+			return EXCEPTION_CONTINUE_SEARCH;
+
 		auto record = ex->ExceptionRecord;
 		auto ctx = ex->ContextRecord;
 
-		if (ex->ExceptionRecord->ExceptionCode == 0xC0000005) {
+		if (record->ExceptionCode != EXCEPTION_ACCESS_VIOLATION)
+			return EXCEPTION_CONTINUE_SEARCH;
 
-			if (ctx->Rip == OFFSET(0x11D2580)) // 0x11D2580 66 83 BE ? ? ? ? ? 0F 95 C0 8B 84 81 ? ? ? ?
-			{
-				ctx->Rax = FALSE;
-				ctx->Rip = OFFSET(0x11D2592);
-				ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "CG_GetEntityImpactType crash prevented" });
+		const auto rip = ctx->Rip;
 
-				return EXCEPTION_CONTINUE_EXECUTION;
-			}
-			else if (ctx->Rip == OFFSET(0x22C4935)) // 0x22C4935 44 0F B6 B1 ?? ?? ?? ?? 33 FF 4C 89 7C 24 ?? 4C 8B 79 18
-			{
-				ctx->Rax = FALSE;
-				ctx->Rip = OFFSET(0x22C49FE);
-				ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "DObjGetBoneIndex crash prevented" });
-
-				return EXCEPTION_CONTINUE_EXECUTION;
-			}
-
-			//else if (utils::is_address_within_range(ctx->Rip, OFFSET(0x1E724A0), OFFSET(0x1E7273F))) // 0x1E724A0 - 0x1E7273F 8B 43 04 89 44 24 74 C7 44 24 ?? ?? ?? ?? ?? C6 44 24 ?? ?? B3 01
-			//{
-			//	ctx->Rip = OFFSET(0x1E72726);
-			//	ImGui::InsertNotification({ ImGuiToastType::Warning, 3000, "LiveInvites_SendJoinInfo prevented" });
-
-			//	return EXCEPTION_CONTINUE_EXECUTION;
-			//}
-
-			else {				
-				catch_exception(ex->ExceptionRecord, ex->ContextRecord);
-				return EXCEPTION_CONTINUE_EXECUTION;
-			}
+		if (rip == OFFSET(0x11D2580))
+		{
+			ctx->Rax = FALSE;
+			ctx->Rip = OFFSET(0x11D2592);
+			return EXCEPTION_CONTINUE_EXECUTION;
 		}
-		return EXCEPTION_CONTINUE_EXECUTION;
+
+		if (rip == OFFSET(0x22C4935))
+		{
+			ctx->Rax = FALSE;
+			ctx->Rip = OFFSET(0x22C49FE);
+			return EXCEPTION_CONTINUE_EXECUTION;
+		}
+
+		catch_exception(record, ctx);
+
+		return EXCEPTION_CONTINUE_SEARCH;
 	}
 
 	void initExceptionHandler() {		

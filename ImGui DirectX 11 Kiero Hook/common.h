@@ -4,9 +4,10 @@
 #define QWORD DWORD64
 #define Hook(original, hook) (DetourTransactionBegin(), DetourUpdateThread(GetCurrentThread()), DetourAttach((LPVOID*)&original, (LPVOID)hook), DetourTransactionCommit())
 #define Unhook(original, hook) (DetourTransactionBegin(), DetourUpdateThread(GetCurrentThread()), DetourDetach((LPVOID*)&original, (LPVOID)hook), DetourTransactionCommit())
-//#define ALOG(...) ImGui::InsertNotification({ ImGuiToastType::Info, 6000, ... })
+#define ALOG(...) ImGui::InsertNotification({ ImGuiToastType::Info, 6000, ... })
 
 extern HMODULE dllbase;
+extern HWND window;
 
 inline DWORD_PTR HookVMT(DWORD_PTR pVtable, DWORD_PTR hook, int index)
 {
@@ -24,7 +25,7 @@ inline DWORD_PTR HookVMT(DWORD_PTR pVtable, DWORD_PTR hook, int index)
 // Typedefs
 typedef __int16(__fastcall* CG_DObjGetWorldTagPosInternalT)(__int64 centity_t, __int64 DObj, int tag, float* whatever, float* pos, int something);
 typedef __int64(__fastcall* Com_GetClientDObjT)(int a1, int a2);
-typedef bool(__fastcall* DDL_GetUIntT)(__int64 result, __int64 a1);
+typedef __int64(__fastcall* DDL_GetUIntT)(__int64 result, __int64 a1);
 typedef __int64(__fastcall* DDL_MoveToNameT)(__int64 fromState, char* toState, const char* name);
 typedef __int64(__fastcall* DDL_MoveToPathT)(__int64 fromState, char* toState, int depth, const char** path);
 typedef bool(__fastcall* DDL_Lookup_MoveToNameT)(__int64 fromState, __int64 toState, const char* name);
@@ -41,7 +42,7 @@ typedef bool(__fastcall* LiveStats_SetCharacterHeadIndexT)(unsigned int sessionM
 typedef bool(__fastcall* LiveStats_SetShowcaseWeaponT)(unsigned int sessionMode, unsigned int statsLocation, DDLContext* ddlContext, unsigned int cacType, unsigned int characterIndex, Variant showcaseWeapon);
 typedef __int64(__fastcall* LiveStorage_UploadStatsForControllerT)(int controllerIndex);
 typedef bool(__fastcall* LootT)(int controllerIndex, __int64 index, unsigned int incAmount);
-typedef __int64(__fastcall* lergstuffT)(int, int);
+typedef __int64(__fastcall* CG_GetLocalClientGlobalsForEnt_T)(int, int);
 typedef void(__fastcall* live_presence_pack_t)(presence_data_s* presence, void* buffer, size_t buffer_size);
 typedef char* (__fastcall* tGetPersonaName) (DWORD_PTR _this);
 typedef __int64(__fastcall* tLiveSteam_FilterPersonaName)(char* buffer, int size, char asciionly);
@@ -70,12 +71,16 @@ extern bool bSpoofSlots;
 extern bool bsvCheats;
 extern bool bsvCheatsRan;
 extern bool bThorns;
+extern bool bThirdPerson;
+extern bool bTpRan;
 extern bool bTracers;
 extern bool bUIRgb;
 extern bool bUnlockDLC;
 extern bool bUnlockFullGame;
 extern bool bNukes;
 extern bool bModTools;
+extern bool bCustomXP;
+extern bool open;
 
 extern char spoofName[32];
 
@@ -87,6 +92,7 @@ extern int iBlackmarketAmt;
 extern int iBribe;
 extern int iComboBoxType;
 extern int iDamageMultiplier;
+extern int iSelectedResolutionTier;
 
 extern __int64 cgsArray;
 extern __int64 clientactive_t;
@@ -121,7 +127,6 @@ extern ImColor mainRgb();
 // Extern function pointers
 extern CG_DObjGetWorldTagPosInternalT CG_DObjGetWorldTagPosInternal;
 extern Com_GetClientDObjT Com_GetClientDObj;
-extern DDL_GetUIntT DDL_GetUInt;
 extern DDL_MoveToNameT DDL_MoveToName;
 extern DDL_MoveToPathT DDL_MoveToPath;
 extern DDL_Lookup_MoveToNameT DDL_Lookup_MoveToName;
@@ -142,7 +147,7 @@ extern LiveStats_SetCharacterHeadIndexT LiveStats_SetCharacterHeadIndex;
 extern LiveStats_SetShowcaseWeaponT LiveStats_SetShowcaseWeapon;
 extern LiveStorage_UploadStatsForControllerT LiveStorage_UploadStatsForController;
 extern LootT GiveLootToSelf;
-extern lergstuffT lergstuff;
+extern CG_GetLocalClientGlobalsForEnt_T CG_GetLocalClientGlobalsForEnt;
 extern live_presence_pack_t live_presence_pack;
 extern send_p2p_packet_t send_p2p_packet;
 extern tGetPersonaName oGetPersonaName;
@@ -152,12 +157,19 @@ extern WorldPosToScreenPosT WorldPosToScreenPos;
 // DONT LOSE THIS 0x26AE260
 
 // Const static function pointers
+const static auto BG_EmblemsReadDDL = reinterpret_cast<__int64(__fastcall*)(DDLState * root, DDLContext * ctx, CompositeEmblem * emblem, int slot, short* outIndex)>(ProcessBase + 0x25F1410);
+const static auto BG_EmblemsGetIconImage = reinterpret_cast<GfxImage * (__fastcall*)(uint16_t icon)>(ProcessBase + 0x25EF520);
 const static auto BG_GetAttachmentName = reinterpret_cast<const char* (__fastcall*)(int itemIndex)>(ProcessBase + 0x266FAF0);
+const static auto BG_GetLayerDataFromDDL = reinterpret_cast<__int64(__fastcall*)(__int64 DDLState, __int64 DDLContext, __int64 CompositeEmblem, int layerCount)>(ProcessBase + 0x25F1780);
+const static auto BG_InitCompositeEmblem = reinterpret_cast<__int64(__fastcall*)(CompositeEmblem * emblem)>(ProcessBase + 0x1154530);
+const static auto BG_PaintshopReadDDL = reinterpret_cast<__int64(__fastcall*)(__int64 DDLState, __int64 DDLContext, __int64 CompositeEmblem, int layerCount)>(ProcessBase + 0x25F3270);
+const static auto BG_PaintshopWriteDDL = reinterpret_cast<__int64(__fastcall*)(__int64 DDLState, __int64 DDLContext, __int64 CompositeEmblem, int layerCount)>(ProcessBase + 0x25F32E0);
 const static auto BG_UnlockablesGetClassSetItem = reinterpret_cast<__int64(__fastcall*)(ControllerIndex_t controllerIndex, ClassSetType_t classSetType, int classSetIndex, int loadoutSlot, const char* slotName)>(ProcessBase + 0x262CAC0);
 const static auto BG_UnlockablesGetItemAttachmentDisplayName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex, int attachmentNum)>(ProcessBase + 0x262D960);
 const static auto BG_UnlockablesGetItemName = reinterpret_cast<const char* (__fastcall*)(eModes eMode, int itemIndex)>(ProcessBase + 0x262E740);
 const static auto BG_UnlockablesGetLoadoutSlotFromString = reinterpret_cast<std::uintptr_t(__fastcall*)(const char*)>(ProcessBase + 0x262EC60);
 const static auto BG_UnlockablesGetNumItemAttachments = reinterpret_cast<int(__fastcall*)(eModes eMode, int itemIndex)>(ProcessBase + 0x262EE20);
+const static auto BG_UnlockablesItemOptionLocked = reinterpret_cast<bool (__fastcall*)(eModes mode, int controllerIndex, int itemIndex, int optionIndex)>(ProcessBase + 0x2631C10);
 const static auto BG_UnlockablesSetBubbleGumPackName= reinterpret_cast<std::uintptr_t(__fastcall*)(CACRoot* cacRoot, int packIndex, const char* name)>(ProcessBase + 0x2634A20);
 const static auto BG_UnlockablesSetClassSetItem = reinterpret_cast<std::uintptr_t(__fastcall*)(ControllerIndex_t controllerIndex, ClassSetType_t classSetType, int classSetIndex, int loadoutSlot, const char* slotName, int itemIndex)>(ProcessBase + 0x2634BF0);
 const static auto BG_UnlockablesSetItemIndex = reinterpret_cast<std::uintptr_t(__fastcall*)(CACRoot* CacRoot, __int64 a2, __int64 a3, __int64 itemIndex)>(ProcessBase + 0x16C8A0);
@@ -166,6 +178,11 @@ const static auto CG_BoldGameMessageCenter = reinterpret_cast<std::uintptr_t(__f
 const static auto CG_BulletHitEvent_Internal = reinterpret_cast<__int64(__fastcall*)(int localClientNum, int sourceEntityNum, int targetEntityNum, __int64 weapon, ImVec3 startPos, ImVec3 position, ImVec3 normal, ImVec3 seeThruDecalNormal, int surfType, int* _event, __int64 eventParam, __int16 a12, unsigned __int16 a13, int a14)>(ProcessBase + 0x1189E10);
 const static auto CG_Draw2D = reinterpret_cast<void(__fastcall*)(int a1)>(ProcessBase + 0x60F920);
 const static auto CL_AddReliableCommand = reinterpret_cast<std::uintptr_t(__fastcall*)(int, const char*)>(ProcessBase + 0x135D4E0);
+const static auto CL_CompositeIsComplete = reinterpret_cast<bool(__fastcall*)(int id)>(ProcessBase + 0x1335400);
+const static auto CL_CompositePopImage = reinterpret_cast<GfxImage*(__fastcall*)(int id)>(ProcessBase + 0x13356B0);
+const static auto CL_CompositePushCancel = reinterpret_cast<bool(__fastcall*)(int id)>(ProcessBase + 0x13357F0);
+const static auto CL_CompositePushEmblem = reinterpret_cast<INT32(__fastcall*)(const CompositeEmblem * emblem,int layerCount, bool largeEmblem, GfxImage * image, uint32_t imageSemantic)>(ProcessBase + 0x1335910);
+const static auto CL_CompositeReleaseImage = reinterpret_cast<void(__fastcall*)(GfxImage * image)>(ProcessBase + 0x1335B90);
 const static auto CL_ConnectionlessCMD = reinterpret_cast<bool(__fastcall*)(int clientNum, netadr_t *from, msg_t *msg)>(ProcessBase + 0x134CD70);
 const static auto CL_GetConfigString = reinterpret_cast<const char* (__fastcall*)(int configStringIndex)>(ProcessBase + 0x1321130);
 const static auto CL_IsLocalClientInGame = reinterpret_cast<std::uintptr_t(__fastcall*)(int localClientNum)>(ProcessBase + 0x1359900);
@@ -175,6 +192,9 @@ const static auto Com_IsInGame = reinterpret_cast<bool(*)()>(ProcessBase + 0x20E
 const static auto Com_LoadLevelFastFiles = reinterpret_cast<void(__fastcall*)(const char* mapName)>(ProcessBase + 0x20F0140);
 const static auto Com_SessionMode_GetGameMode = reinterpret_cast<eGameModes(__cdecl*)()>(ProcessBase + 0x20EA7F0);
 const static auto Com_SessionMode_GetMode = reinterpret_cast<eModes(__cdecl*)()>(ProcessBase + 0x20EAC70);
+const static auto Com_SessionMode_IsOnlineGame = reinterpret_cast<bool(*)()>(ProcessBase + 0x20EB2F0);
+const static auto DDL_GetString = reinterpret_cast<const char*(__fastcall*)(__int64 a1, __int64 a2)>(ProcessBase + 0x24A9290);
+const static auto DDL_GetUInt = reinterpret_cast<__int64(__fastcall*)(__int64 a1, __int64 a2)>(ProcessBase + 0x24A9480);
 const static auto DB_CheckXFile = reinterpret_cast<bool(__fastcall*)(const char* a1, __int64 a2, __int64 a3, __int64 a4)>(ProcessBase + 0x141F9D0);
 const static auto Demo_SaveScreenshotToContentServer = reinterpret_cast<void(__fastcall*)(int localClientNum, int fileSlot)>(ProcessBase + 0x2591050);
 const static auto Demo_SetMetaData = reinterpret_cast<bool(__fastcall*)(unsigned int a1, __int64 a2, unsigned int a3, __int64 metaDataSize, int a5, char duration)>(ProcessBase + 0x2591590);
@@ -186,6 +206,7 @@ const static auto flsomeWeirdCharacterIndex = reinterpret_cast<float(__fastcall*
 const static auto G_Damage = reinterpret_cast<__int64(__fastcall*)(__int64 targ, __int64 inflictor, __int64 attacker, __int64 a4, __int64 a5, int a6, int a7, int a8, __int64 a9, int a10, __int64 a11, int a12, int a13, int a14, __int16 a15, int a16, __int64 a17)>(ProcessBase + 0x1980980);
 const static auto Game_Message = reinterpret_cast<std::uintptr_t(__fastcall*)(int clientNum, const char* msg)>(ProcessBase + 0x8CB400);
 const static auto get_item_infos(eModes mode) { return &reinterpret_cast<item_infos_s*>(ProcessBase + 0x19BABF00)[mode]; }
+const static auto CG_GetCGArray() { return reinterpret_cast<cg_s*>(cgArray); }
 const static auto I_Strcpy = reinterpret_cast<void(__fastcall*)(BYTE* a1, __int64 a2, const char* a3)>(ProcessBase + 0x227CA00);
 const static auto Live_AreWeHost = reinterpret_cast<bool(*)()>(ProcessBase + 0x1E199F0);
 const static auto Live_Base_UserGetName = reinterpret_cast<UINT8(__fastcall*)(UINT8 * a1, int a2, char a3)>(ProcessBase + 0x1EA4960);
@@ -195,6 +216,8 @@ const static auto Live_UserGetName = reinterpret_cast<bool(__fastcall*)(Controll
 const static auto LiveAchievements_GiveAchievement = reinterpret_cast<void(__fastcall*)(const char* achievementName)>(ProcessBase + 0x1EA5650);
 const static auto LiveFriends_IsFriendByXUID = reinterpret_cast<bool(__fastcall*)(int controllerIndex, __int64 XUID)>(ProcessBase + 0x1DECFD0);
 const static auto LiveEntitlements_IsEntitlementActiveForController = reinterpret_cast<bool(__fastcall*)(ControllerIndex_t controllerIndex, int incentiveId)>(ProcessBase + 0x1E06110);
+const static auto Live_Emblems_GetEmblemData = reinterpret_cast<__int64(__fastcall*)(int controllerIndex, int customizationType, int emblemindex, int fileType, CompositeEmblem* emblem)>(ProcessBase + 0x1DE0970);
+const static auto Live_Emblems_LoadData = reinterpret_cast<void(__fastcall*)()>(ProcessBase + 0x1DE0B70);
 const static auto LiveInventory_AreExtraSlotsPurchased = reinterpret_cast<bool(__fastcall*)(ControllerIndex_t controllerIndex)>(ProcessBase + 0x1DFC580);
 const static auto LiveInventory_IsValid = reinterpret_cast<bool(__fastcall*)(ControllerIndex_t controllerIndex)>(ProcessBase + 0x1DFDFE0);
 const static auto LiveInventory_GetItemQuantity = reinterpret_cast<__int64(__fastcall*)(ControllerIndex_t controllerIndex, int itemId)>(ProcessBase + 0x1DFCC60);
@@ -225,8 +248,11 @@ const static auto LobbyMsgRW_PrepWriteMsg = reinterpret_cast<bool(__fastcall*)(L
 const static auto LobbyMsgRW_ReadArrayBegin = reinterpret_cast<void(__fastcall*)(LobbyMsg*, const char*)>(ProcessBase + 0x1EEA260);
 const static auto LobbyMsgRW_ReadString = reinterpret_cast<bool(__fastcall*)(LobbyMsg*, const char* expectedKey, char* a3)>(ProcessBase + 0x227CF30);
 const static auto LobbyTypes_GetMainMode = reinterpret_cast<LobbyMainMode(__cdecl*)()>(ProcessBase + 0x1EDFA00);
+const static auto Loot_BurnDuplicates = reinterpret_cast<bool(*)(int ControllerIndex, eModes mode)>(ProcessBase + 0x1E75F90);
 const static auto Loot_BuyCrate = reinterpret_cast<bool(*)(int ControllerIndex, int CrateType, unsigned int CurrencyType)>(ProcessBase + 0x1E760B0);
+const static auto Loot_LiquefyGum = reinterpret_cast<bool(*)(int ControllerIndex, eModes mode, const char* itemName, bool burnAll)>(ProcessBase + 0x1E76CB0);
 const static auto Loot_SpendVials = reinterpret_cast<bool(*)(unsigned int ControllerIndex, int VialNum)>(ProcessBase + 0x1E77490);
+const static auto Lua_IsModsLoaded = reinterpret_cast<__int64(__fastcall*)(__int64 a1)>(ProcessBase + 0x1FC6760);
 const static auto Memset = reinterpret_cast<int(__fastcall*)(char* a1, __int64 a2, unsigned __int64 a3)>(ProcessBase + 0x2BC53B0);
 const static auto Mods_IsModsLoaded = reinterpret_cast<bool(__fastcall*)()>(ProcessBase + 0x20C8F60);
 const static auto Mods_IsModsLoaded_1 = reinterpret_cast<bool(__fastcall*)()>(ProcessBase + 0x20C9AE0);
@@ -235,9 +261,12 @@ const static auto MSG_InfoResponse = reinterpret_cast<bool(*)(void*, LobbyMsg*)>
 const static auto MSG_InitReadOnly = reinterpret_cast<void(*)(msg_t*, const char*, int)>(ProcessBase + 0x20FCC10);
 const static auto MSG_ReadByte = reinterpret_cast<std::uint8_t(*)(msg_t*)>(ProcessBase + 0x20FD050);
 const static auto MSG_ReadData = reinterpret_cast<void(*)(msg_t*, void*, int)>(ProcessBase + 0x20FD0B0);
-const static auto Msg_ReadStringLine = reinterpret_cast<char*(__fastcall*)(msg_t* msg, char* string, int maxChars)>(ProcessBase + 0x20FED40);
+const static auto MSG_ReadStringLine = reinterpret_cast<char*(__fastcall*)(msg_t* msg, char* string, int maxChars)>(ProcessBase + 0x20FED40);
+const static auto R_CodeImage_Create = reinterpret_cast<GfxImage*(__fastcall*)(int width, int height, int imageFormat, int flags, const char* name)>(ProcessBase + 0x1C81370);
+const static auto R_CodeImage_Release = reinterpret_cast<void(__fastcall*)(GfxImage* image)>(ProcessBase + 0x1C81C30);
 const static auto R_ConvertColorToBytes = reinterpret_cast<void(__fastcall*)(ImVec4 * color, byte * bytes)>(ProcessBase + 0x1D10840);
 const static auto SEH_SafeTranslateString = reinterpret_cast<const char* (__fastcall*)(const char* String)>(ProcessBase + 0x221D0B0);
+const static auto ShouldShowMouse = reinterpret_cast<int (__fastcall*)(unsigned int controllerIndex)>(ProcessBase + 0x2230B50);
 const static auto SetCharacterIndex = reinterpret_cast<bool(__fastcall*)(__int64 ControllerIndex, __int64 eModes, unsigned int CharacterIndex)>(ProcessBase + 0x19E1F0);
 const static auto SetGobblegum = reinterpret_cast<std::uintptr_t(__fastcall*)(CACRoot* CacRoot, __int64 packindex, __int64 buffIndex, __int64 itemIndex)>(ProcessBase + 0x2634990);
 const static auto Storage_GetDDLContext = reinterpret_cast<DDLContext*(__fastcall*)(unsigned int a1, int a2, int a3)>(ProcessBase + 0x221A640);
@@ -246,7 +275,9 @@ const static auto Storage_Write = reinterpret_cast<bool(__fastcall*)(int a1, int
 const static auto StringTable_GetAsset = reinterpret_cast<void(__fastcall*)(const char* filename, StringTable * *tablePtr)>(ProcessBase + 0x2251F70);
 const static auto StringTable_GetColumnValueForRow = reinterpret_cast<const char* (__fastcall*)(StringTable * table, __int32 row, __int32 column)>(ProcessBase + 0x2252200);
 const static auto StringTable_Lookup = reinterpret_cast<const char* (__fastcall*)(StringTable * table, int comparisonColumn, const char* value, int valueColumn)>(ProcessBase + 0x2252390);
+const static auto SV_Cmd_TokenizeString = reinterpret_cast<__int64(__fastcall*)(const char* text)>(ProcessBase + 0x20E3070);
 const static auto Sys_GetTLS = reinterpret_cast<__int64(__fastcall*)()>(ProcessBase + 0x212B3D0);
+const static auto UI_GetTotalLayersByCustomizationType = reinterpret_cast<__int64(__fastcall*)(int a1)>(ProcessBase + 0x1F28860);
 const static auto UI_Interface_DrawText = reinterpret_cast<void(__fastcall*)(unsigned int localClientNum, __int64* luiElement, float xPos, float yPos, unsigned int R, unsigned int G,  unsigned int B, unsigned int A, char flags, char* text, __int64 font, float fontHeight, float wrapWidth, float alignment, char luaVM, QWORD * element)>(ProcessBase + 0x1F28860);
 const static auto UI_IsRenderingImmediately = reinterpret_cast<bool(__cdecl*)()>(ProcessBase + 0x268CC60);
 const static auto UI_SafeTranslateString = reinterpret_cast<const char* (__fastcall*)(const char* String)>(ProcessBase + 0x22328F0);
@@ -255,6 +286,7 @@ const static auto dwInstantDispatchMessage = reinterpret_cast<__int64(__fastcall
 
 // Extern array and vector declarations
 extern const char* cpmapnames[11];
+extern const char* levels[11];
 extern const char* KeybindNames[17];
 extern const char* offhandMenuNames[9];
 extern const char* offhandSlots[8];

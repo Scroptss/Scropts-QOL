@@ -1,6 +1,11 @@
 #pragma once
+#define NOMINMAX
 #include <Windows.h>
+#include <wrl/client.h>
 #include <winternl.h>
+#include <unordered_set>
+#include <mutex>
+#include <atomic>
 #include <Xinput.h>
 #pragma comment(lib, "xinput9_1_0.lib")
 #include <cstdint>
@@ -30,7 +35,7 @@
 #include "FontAwesome/IconsFontAwesome6.h"
 #include "common.h"
 #include "Utils.hpp"
-
+#include <filesystem>
 #include "hooks.h"
 
 
@@ -38,4 +43,4 @@ typedef HRESULT(__stdcall* Present) (IDXGISwapChain* pSwapChain, UINT SyncInterv
 typedef LRESULT(CALLBACK* WNDPROC)(HWND, UINT, WPARAM, LPARAM);
 typedef uintptr_t PTR;
 
-#define SCROPTS_VERSION std::string("3.0.5")
+#define SCROPTS_VERSION std::string("3.1.1")
