@@ -1,6 +1,7 @@
 #pragma once
 #define NOMINMAX
 #include <Windows.h>
+#include <wincodec.h>
 #include <wrl/client.h>
 #include <winternl.h>
 #include <unordered_set>

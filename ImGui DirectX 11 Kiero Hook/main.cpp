@@ -6,7 +6,9 @@
 #include "servers.h"
 #include "players.h"
 #include <d3dcompiler.h>
+#include <wincodec.h>
 #pragma comment(lib, "d3dcompiler.lib")
+#pragma comment(lib, "windowscodecs.lib")
 
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -195,8 +197,6 @@ uintptr_t FindSpoof()
 
 const void* spoof_t = (const void*)FindSpoof();
 
-bool is_down;
-
 void InitImGui()
 {
 	ImGui::CreateContext();
@@ -241,13 +241,12 @@ void drawTracers() {
 
 			drawlist->AddLine(ImVec2(tracer.end_screen.x - tracer.radius, tracer.end_screen.y - tracer.radius), ImVec2(tracer.end_screen.x + tracer.radius, tracer.end_screen.y + tracer.radius), ImColor(main_color.Value.x, main_color.Value.y, main_color.Value.z, tracer.opacity), 1);
 			drawlist->AddLine(ImVec2(tracer.end_screen.x - tracer.radius, tracer.end_screen.y + tracer.radius), ImVec2(tracer.end_screen.x + tracer.radius, tracer.end_screen.y - tracer.radius), ImColor(main_color.Value.x, main_color.Value.y, main_color.Value.z, tracer.opacity), 1);
-			
+
 
 			tracer.opacity -= flTracerTime;
 		}
 	}
 }
-
 
 const char* getItemNameforItemID(int ItemId) {
 
@@ -290,6 +289,7 @@ bool get_column_value_for_row_from_path(std::string path, std::int32_t row, std:
 
 	return false;
 }
+
 std::string get_column_value_for_row_from_path(std::string path, std::int32_t row, std::int32_t column)
 {
 	StringTable* string_table = nullptr;
@@ -368,7 +368,8 @@ int getComboItemSize(bool isPrimary) {
 			itemIndex = primarySelectedItems[0];
 		}
 		return BG_UnlockablesGetNumItemAttachments(Com_SessionMode_GetMode(), itemIndex);
-		break; }
+		break;
+	}
 	case CBC_CAMOS:
 		return 138;
 		break;
@@ -394,10 +395,10 @@ int getComboItemSize(bool isPrimary) {
 const char* getComboItemName(int index, bool isPrimary, int type) {
 
 	std::string baseName;
-	std::string displayName;	
+	std::string displayName;
 
 	switch (type) {
-	
+
 	case CBC_ATTACHMENTS:
 	{
 		int itemIndex = secondarySelectedItems[0];
@@ -490,7 +491,7 @@ const char* getComboItemName(int index, bool isPrimary, int type) {
 			return UI_SafeTranslateString(baseName.c_str());
 		}
 		break;
-	}		
+	}
 	default:
 		return nullptr;
 	}
@@ -525,7 +526,7 @@ __int64 GetStatsBuffer(int type) {
 	}
 }
 
-void resetFileshareMedia() {	
+void resetFileshareMedia() {
 
 	//for (int i = 0; i < 32; i++) {
 	//	// Variants
@@ -585,7 +586,6 @@ void resetFileshareMedia() {
 }
 
 // General
-
 
 void unlockCallingCards() {
 
@@ -833,7 +833,7 @@ void UnlockAllMedals() {
 		DDL_MoveToPath(tmp, result, 3, path);
 		DDL_SetUInt((__int64)result, a1, 1);
 		ZeroMemory(result, size(result));
-		
+
 	}
 	LiveStorage_UploadStatsForController(0);
 
@@ -909,7 +909,7 @@ void CompleteAllMissions() {
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
 	const char* path[8];
 	auto a1 = GetStatsBuffer(0);
-	
+
 	char result[2000];
 
 	for (int i = 0; i < 11; i++) {
@@ -919,7 +919,7 @@ void CompleteAllMissions() {
 		DDL_MoveToPath(tmp, result, 3, path);
 		DDL_SetUInt((__int64)result, a1, 1);
 		ZeroMemory(result, size(result));
-		
+
 		for (int d = 0; d < 4; d++)
 		{
 			auto diff = std::to_string(d);
@@ -970,7 +970,7 @@ void UnlockAllMusic() {
 	auto a1 = GetStatsBuffer(0);
 	char result[2000];
 
-	for (int i = 0; i < 32; i++) {		
+	for (int i = 0; i < 32; i++) {
 		path[0] = "musicUnlocks";
 		path[1] = intToConstCharPtr(i);
 		DDL_MoveToPath(tmp, result, 2, path);
@@ -1017,21 +1017,35 @@ void unlockArenaStats()
 
 // MP
 
-void setStatbyName(const char* statName, int value) {
-	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
-	const char* path[8];
-	__int64 a1 = GetStatsBuffer(0);
-	path[0] = "PlayerStatsList";
-	path[2] = "statValue";
-	if (bArena) {
-		path[2] = "arenaValue";
-	}
-	char result[2000];
-	path[1] = statName;
-	DDL_MoveToPath(tmp, result, 3, path);
-	DDL_SetUInt((__int64)result, a1, value);
-	ZeroMemory(result, sizeof(result));
 
+void setStatbyName(const char* statName, int value)
+{
+	if (!statName || !*statName)
+		return;
+
+	auto root = LiveStats_Core_GetRootDDLState(GetSessionState());
+	auto ctx = GetStatsBuffer(0);
+	if (!root || !ctx)
+		return;
+
+	const char* path[3] =
+	{
+		"PlayerStatsList",
+		statName,
+		bArena ? "arenaValue" : "statValue"
+	};
+
+	char state[2000]{};
+	if (!DDL_MoveToPath(root, state, 3, path))
+	{
+		utils::write_Debug(
+			"[StatEditor] DDL_MoveToPath failed: PlayerStatsList/%s/%s",
+			statName,
+			path[2]);
+		return;
+	}
+
+	DDL_SetUInt(reinterpret_cast<__int64>(state), ctx, value);
 }
 
 void setGroupStats() {
@@ -1214,34 +1228,34 @@ void SetChallengeValue(
 	}
 
 	if (!_stricmp(category, "item") || !_stricmp(category, "weapon"))
-	/*{
-		uint32_t itemIndex = GetItemIndexFromStatTable(object);
+		/*{
+			uint32_t itemIndex = GetItemIndexFromStatTable(object);
 
-		SetUIntPath(root, ctx,
-			{
-				"itemstats",
-				intToConstCharPtr(itemIndex),
-				"stats",
-				stat,
-				"challengeValue"
-			}, value);
+			SetUIntPath(root, ctx,
+				{
+					"itemstats",
+					intToConstCharPtr(itemIndex),
+					"stats",
+					stat,
+					"challengeValue"
+				}, value);
 
-		return;
-	}*/
+			return;
+		}*/
 
-	if (!_stricmp(category, "attachment"))
-	{
-		SetUIntPath(root, ctx,
-			{
-				"attachments",
-				object,
-				"stats",
-				stat,
-				"challengeValue"
-			}, value);
+		if (!_stricmp(category, "attachment"))
+		{
+			SetUIntPath(root, ctx,
+				{
+					"attachments",
+					object,
+					"stats",
+					stat,
+					"challengeValue"
+				}, value);
 
-		return;
-	}
+			return;
+		}
 
 	if (!_stricmp(category, "specialist") || !_stricmp(category, "hero"))
 	{
@@ -1671,7 +1685,7 @@ void unlockSpecialistOutfits() {
 		path[0] = "specialiststats";
 		path[1] = converted.c_str();
 		path[2] = "stats";
-		const char* p3[23] = { "kills","kills_ability", "kills_weapon", "multikill_ability", "multikill_weapon", "kill_one_game_ability", "kill_one_game_weapon", "challenge1", "challenge2", "challenge3", "challenge4", "challenge5", "challenge6", "challenge7", "challenge8", "challenge9", "challenge10", "challenge11", "challenge12", "transmission1", "transmission2", "transmission3", "transmission4"};
+		const char* p3[23] = { "kills","kills_ability", "kills_weapon", "multikill_ability", "multikill_weapon", "kill_one_game_ability", "kill_one_game_weapon", "challenge1", "challenge2", "challenge3", "challenge4", "challenge5", "challenge6", "challenge7", "challenge8", "challenge9", "challenge10", "challenge11", "challenge12", "transmission1", "transmission2", "transmission3", "transmission4" };
 
 		for (int k = 0; k < 23; k++)
 		{
@@ -1694,10 +1708,10 @@ static int GetParagonBaseForMode(int mode)
 	switch (mode)
 	{
 	case MODE_MULTIPLAYER:
-		return 56; 
+		return 56;
 
 	case MODE_ZOMBIES:
-		return 36; 
+		return 36;
 
 	default:
 		return 0;
@@ -1926,7 +1940,7 @@ void setStats() {
 	DDL_MoveToPath(tmp, result, 3, path);
 	DDL_SetUInt((__int64)result, a1, iHighestRound);
 	ZeroMemory(result, sizeof(result));
-	
+
 
 	path[2] = "statValue";
 	if (bArena) {
@@ -2166,7 +2180,7 @@ void setStatMilestones(const char* mode, const char* csv)
 
 		const char* targetStr = StringTable_GetColumnValueForRow(table, row, 2);
 
-		int value = 50000; 
+		int value = 50000;
 
 		if (targetStr && targetStr[0])
 			value = std::stoi(targetStr);
@@ -2212,98 +2226,205 @@ void setStatMilestones(const char* mode, const char* csv)
 
 void unlockContracts(int start, int end, int type)
 {
-	while (start < end)
+	StringTable* table = nullptr;
+	StringTable_GetAsset(
+		"gamedata/tables/mp/mp_contracttable.csv",
+		&table
+	);
+
+	if (!table)
+		return;
+
+	auto root = LiveStats_Core_GetRootDDLState(
+		Com_SessionMode_GetMode()
+	);
+
+	auto ctx = GetStatsBuffer(0);
+
+	if (!root || !ctx)
+		return;
+
+	for (int contract = start; contract < end; ++contract)
 	{
-		StringTable* table = nullptr;
-		StringTable_GetAsset("gamedata/tables/mp/mp_contracttable.csv", &table);
-		if (!table)
-			return;
+		std::string row = std::to_string(contract);
 
-		auto root = LiveStats_Core_GetRootDDLState(Com_SessionMode_GetMode());
-		auto ctx = GetStatsBuffer(0);
+		const char* contractID =
+			StringTable_Lookup(table, 0, row.c_str(), 0);
 
-		char state[2000]{};
-		const char* path[4]{};
+		const char* challengeValue =
+			StringTable_Lookup(table, 0, row.c_str(), 2);
 
-		const char* row = intToConstCharPtr(start);
+		const char* completionStat1 =
+			StringTable_Lookup(table, 0, row.c_str(), 7);
 
-		const char* contractID = StringTable_Lookup(table, 0, row, 0);
-		const char* challengeValue = StringTable_Lookup(table, 0, row, 2);
-		const char* challengeName = StringTable_Lookup(table, 0, row, 7);
-		const char* challengeAlias = StringTable_Lookup(table, 0, row, 8);
-		const char* extraPath = StringTable_Lookup(table, 0, row, 9);
+		const char* completionStat2 =
+			StringTable_Lookup(table, 0, row.c_str(), 8);
 
-		path[0] = "contracts";
-		path[1] = intToConstCharPtr(type);
+		const char* extraPath =
+			StringTable_Lookup(table, 0, row.c_str(), 9);
 
-		path[2] = "active";
-		if (DDL_MoveToPath(root, state, 3, path))
-			DDL_SetUInt((__int64)state, ctx, 1);
+		DDLState contractsState{};
+		DDLState contractState{};
+		DDLState fieldState{};
 
-		path[2] = "index";
-		if (contractID && contractID[0] && DDL_MoveToPath(root, state, 3, path))
-			DDL_SetUInt((__int64)state, ctx, std::strtoul(contractID, nullptr, 10));
-
-		path[2] = "progress";
-		if (challengeValue && challengeValue[0] && DDL_MoveToPath(root, state, 3, path))
-			DDL_SetUInt((__int64)state, ctx, std::strtoul(challengeValue, nullptr, 10));
-
-		path[2] = "award_given";
-		if (DDL_MoveToPath(root, state, 3, path))
-			DDL_SetUInt((__int64)state, ctx, 1);
-
-		if (extraPath && extraPath[0])
+		if (DDL_MoveToName(root, (char*)&contractsState, "contracts") &&
+			DDL_MoveToIndex(&contractsState, &contractState, type))
 		{
-			auto parts = split(extraPath, ' ');
 
-			if (parts.size() >= 2 && !parts[0].empty() && !parts[1].empty())
+			if (DDL_MoveToName(
+				(__int64)&contractState,
+				(char*)&fieldState,
+				"active"))
 			{
-				const char* extraDDLPath[2]{};
-				extraDDLPath[0] = parts[0].c_str();
+				DDL_SetUInt(
+					reinterpret_cast<__int64>(&fieldState),
+					ctx,
+					1
+				);
+			}
 
-				int extraIndex = std::strtoul(parts[1].c_str(), nullptr, 10);
-
-				/*if (DDL_MoveToPath(root, state, 2, extraDDLPath[0], extraIndex))
+			if (contractID && *contractID)
+			{
+				if (DDL_MoveToName(
+					(__int64)&contractState,
+					(char*)&fieldState,
+					"index"))
 				{
-					DDL_SetUInt((__int64)state, ctx, 1);
-				}*/
+					DDL_SetUInt(
+						reinterpret_cast<__int64>(&fieldState),
+						ctx,
+						std::strtoul(contractID, nullptr, 10)
+					);
+				}
+			}
 
-				 std::string extraIndexStr = std::to_string(extraIndex);
-				 extraDDLPath[1] = extraIndexStr.c_str();
-				
-				 if (DDL_MoveToPath(root, state, 2, extraDDLPath))
-				     DDL_SetUInt((__int64)state, ctx, 1);
+			if (challengeValue && *challengeValue)
+			{
+				if (DDL_MoveToName(
+					(__int64)&contractState,
+					(char*)&fieldState,
+					"progress"))
+				{
+					DDL_SetUInt(
+						reinterpret_cast<__int64>(&fieldState),
+						ctx,
+						std::strtoul(challengeValue, nullptr, 10)
+					);
+				}
+			}
+
+			if (DDL_MoveToName(
+				(__int64)&contractState,
+				(char*)&fieldState,
+				"award_given"))
+			{
+				DDL_SetUInt(
+					reinterpret_cast<__int64>(&fieldState),
+					ctx,
+					1
+				);
 			}
 		}
 
-		if (challengeName && challengeName[0])
+		if (extraPath && *extraPath)
 		{
-			const char* statPath[3]{
+			auto parts = split(extraPath, ' ');
+
+			if (parts.size() >= 2 &&
+				!parts[0].empty() &&
+				!parts[1].empty())
+			{
+				const int extraIndex =
+					static_cast<int>(
+						std::strtoul(
+							parts[1].c_str(),
+							nullptr,
+							10
+						)
+						);
+
+				DDLState extraArray{};
+				DDLState extraElement{};
+
+				if (DDL_MoveToName(
+					root,
+					(char*)&extraArray,
+					parts[0].c_str()) &&
+					DDL_MoveToIndex(
+						&extraArray,
+						&extraElement,
+						extraIndex))
+				{
+					DDL_SetUInt(
+						reinterpret_cast<__int64>(&extraElement),
+						ctx,
+						1
+					);
+				}
+			}
+		}
+
+
+		//
+		// Column 7 completion stat
+		//
+
+		if (completionStat1 && *completionStat1)
+		{
+			const char* statPath[] =
+			{
 				"playerstatslist",
-				challengeName,
+				completionStat1,
 				"statvalue"
 			};
 
-			if (DDL_MoveToPath(root, state, 3, statPath))
-				DDL_SetUInt((__int64)state, ctx, 1);
+			DDLState statState{};
+
+			if (DDL_MoveToPath(
+				root,
+				(char*)&statState,
+				3,
+				statPath))
+			{
+				DDL_SetUInt(
+					reinterpret_cast<__int64>(&statState),
+					ctx,
+					1
+				);
+			}
 		}
 
-		if (challengeAlias && challengeAlias[0])
+
+		//
+		// Column 8 completion stat
+		//
+
+		if (completionStat2 && *completionStat2)
 		{
-			const char* statPath[3]{
+			const char* statPath[] =
+			{
 				"playerstatslist",
-				challengeAlias,
+				completionStat2,
 				"statvalue"
 			};
 
-			if (DDL_MoveToPath(root, state, 3, statPath))
-				DDL_SetUInt((__int64)state, ctx, 1);
-		}
+			DDLState statState{};
 
-		++start;
+			if (DDL_MoveToPath(
+				root,
+				(char*)&statState,
+				3,
+				statPath))
+			{
+				DDL_SetUInt(
+					reinterpret_cast<__int64>(&statState),
+					ctx,
+					1
+				);
+			}
+		}
 	}
 }
-
 
 void resetCrypto() {
 	auto tmp = LiveStats_Core_GetRootDDLState(GetSessionState());
@@ -2321,7 +2442,7 @@ void setMaxAttachments() {
 
 
 	for (int i = 0; i < 44; i++) {
-		std::vector<const char*> base = { "Attachments", BG_GetAttachmentName(i)};
+		std::vector<const char*> base = { "Attachments", BG_GetAttachmentName(i) };
 
 		SetValue(root, ctx, toState, { base[0], base[1], "purchased" }, 3);
 		SetValue(root, ctx, toState, { base[0], base[1], "xp" }, 665535);
@@ -2623,8 +2744,8 @@ void setClassSetItem(int itemId, int iComboBoxtype, int classSetIndex, int class
 	switch (iComboBoxType) {
 	case CBC_ATTACHMENTS:
 		break;
-	case CBC_WEAPONTYPE:		
-		if (itemId >= 73) 
+	case CBC_WEAPONTYPE:
+		if (itemId >= 73)
 			item += 1;
 		if (itemId == 131)
 			item = 147;
@@ -2655,7 +2776,7 @@ void setClassSetItem(int itemId, int iComboBoxtype, int classSetIndex, int class
 	eModes a1 = Com_SessionMode_GetMode();
 	auto classSetType = LiveStats_ClassSets_GetClassSetTypeForMode(a1, a);
 
-	BG_UnlockablesSetClassSetItem(CONTROLLER_INDEX_0, classSetType, classSetIndex, classIndex , slotName, item);
+	BG_UnlockablesSetClassSetItem(CONTROLLER_INDEX_0, classSetType, classSetIndex, classIndex, slotName, item);
 
 }
 
@@ -2680,7 +2801,7 @@ void setClassItem(int ItemId, int slotItem, int classIndex) {
 	auto CACroot = LiveStats_Loadouts_GetCACRoot(&Buffer, 0, a3);
 	__int64 a4 = BG_UnlockablesGetLoadoutSlotFromString(slots[slotItem]);
 	BG_UnlockablesSetItemIndex(&Buffer, (unsigned int)classIndex, a4, ItemId);
-	ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "setClassItem: Successfully set item %i in %s (Class index %i)", ItemId, slots[slotItem], classIndex});
+	ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "setClassItem: Successfully set item %i in %s (Class index %i)", ItemId, slots[slotItem], classIndex });
 
 }
 
@@ -2694,14 +2815,14 @@ void setGobblePackName(int gobblePackIndex, std::string gobblePackName) {
 	BG_UnlockablesSetBubbleGumPackName(&Buffer, gobblePackIndex, gobblePackName.c_str());
 }
 
-void setClassName(int classSetIndex, int classIndex, std::string className) { 
-	
+void setClassName(int classSetIndex, int classIndex, std::string className) {
+
 	eGameModes a = Com_SessionMode_GetGameMode();
 	eModes a1 = Com_SessionMode_GetMode();
 	ClassSetType_t a3 = LiveStats_ClassSets_GetClassSetTypeForMode(a1, a);
 
 	std::string cmd = "";
-	
+
 	switch (a3) {
 	case CLASS_SET_TYPE_MP_PUBLIC:
 		cmd = "storagewriteddl class_sets_mp publicmatchclasssets " + std::to_string(classSetIndex) + " customclassname " + std::to_string(classIndex) + " \"" + className + "\"";
@@ -2721,7 +2842,7 @@ void setClassName(int classSetIndex, int classIndex, std::string className) {
 	}
 
 	Cbuf_AddText(0, cmd.c_str());
-	
+
 
 }
 
@@ -3250,10 +3371,10 @@ bool SetEmblemInt(
 	path[1] = intToConstCharPtr(slot);
 	path[2] = field;
 
-	if (!DDL_MoveToPath((__int64)root, (char*) & state, 3, path))
+	if (!DDL_MoveToPath((__int64)root, (char*)&state, 3, path))
 		return false;
 
-	DDL_SetInt((__int64) & state, (__int64)ctx, value);
+	DDL_SetInt((__int64)&state, (__int64)ctx, value);
 	return true;
 }
 
@@ -3274,7 +3395,7 @@ bool SetEmblemString(
 	if (!DDL_MoveToPath((__int64)root, (char*)&state, 3, path))
 		return false;
 
-	DDL_SetString((__int64) & state, (__int64)ctx, value);
+	DDL_SetString((__int64)&state, (__int64)ctx, value);
 	return true;
 }
 
@@ -3338,8 +3459,8 @@ int GetHighestEmblemSortIndex(DDLState* root, DDLContext* ctx)
 		path[1] = intToConstCharPtr(i);
 		path[2] = "sortIndex";
 
-		if (DDL_MoveToPath((__int64)root, (char*)&state, 3, path)){
-			const int sort = DDL_GetUInt((__int64) & state, (__int64)ctx);
+		if (DDL_MoveToPath((__int64)root, (char*)&state, 3, path)) {
+			const int sort = DDL_GetUInt((__int64)&state, (__int64)ctx);
 			if (sort > maxSort)
 				maxSort = sort;
 		}
@@ -3400,10 +3521,10 @@ bool IsEmblemSlotUsed(DDLState* root, DDLContext* ctx, int slot)
 	path[1] = intToConstCharPtr(slot);
 	path[2] = "isUsed";
 
-	if (!DDL_MoveToPath((__int64)root, (char*) & state, 3, path))
+	if (!DDL_MoveToPath((__int64)root, (char*)&state, 3, path))
 		return true;
 
-	return DDL_GetUInt((__int64) & state, (__int64)ctx) != 0;
+	return DDL_GetUInt((__int64)&state, (__int64)ctx) != 0;
 }
 
 struct ReadEmblemFileResult
@@ -3732,7 +3853,7 @@ namespace EmblemPreview
 	inline constexpr int COMPOSITE_JOB_COUNT = 16;
 	inline constexpr int EMBLEM_LAYER_CAPACITY = 64;
 	inline constexpr std::size_t EMBLEM_LAYER_SIZE = 0x60;
-	inline constexpr std::uint32_t EMBLEM_PREVIEW_FLAGS = 0x40000000u;
+	inline constexpr std::uint32_t EMBLEM_PREVIEW_FLAGS = 0x80000000u;
 
 	inline std::uint64_t g_nextPreviewAllowedMs = 0;
 	inline constexpr std::uint64_t PREVIEW_SUBMIT_COOLDOWN_MS = 300;
@@ -3971,6 +4092,433 @@ namespace EmblemPreview
 			: nullptr;
 	}
 
+
+	// ---------------------------------- PNG Export ---------------------------------------
+
+	inline std::string g_pngExportFileName = "emblem";
+	inline int g_pngExportWidth = 1200;
+	inline int g_pngExportHeight = 736;
+	inline int g_pngExportPreset = 2;
+
+	inline std::filesystem::path GetExportsDirectory()
+	{
+		return GetGameDirectory() / "exports";
+	}
+
+	inline std::string SanitizePngFileName(std::string fileName)
+	{
+		fileName = std::filesystem::path(fileName).filename().string();
+
+		for (char& c : fileName)
+		{
+			const unsigned char uc = static_cast<unsigned char>(c);
+			if (uc < 32 || c == '<' || c == '>' || c == ':' || c == '"' ||
+				c == '/' || c == '\\' || c == '|' || c == '?' || c == '*')
+			{
+				c = '_';
+			}
+		}
+
+		while (!fileName.empty() && (fileName.back() == ' ' || fileName.back() == '.'))
+			fileName.pop_back();
+
+		if (fileName.empty())
+			fileName = "emblem";
+
+		std::filesystem::path p(fileName);
+		if (_stricmp(p.extension().string().c_str(), ".png") != 0)
+			fileName += ".png";
+
+		return fileName;
+	}
+
+	inline bool CopyPrivatePreviewToBgra(
+		std::vector<std::uint8_t>& pixels,
+		UINT& width,
+		UINT& height)
+	{
+		pixels.clear();
+		width = 0;
+		height = 0;
+
+		if (!pDevice || !pContext || !g_hasPrivatePreview || !g_privatePreview.valid())
+			return false;
+
+		D3D11_TEXTURE2D_DESC srcDesc{};
+		g_privatePreview.texture->GetDesc(&srcDesc);
+
+		const bool rgba =
+			srcDesc.Format == DXGI_FORMAT_R8G8B8A8_TYPELESS ||
+			srcDesc.Format == DXGI_FORMAT_R8G8B8A8_UNORM ||
+			srcDesc.Format == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+
+		const bool bgra =
+			srcDesc.Format == DXGI_FORMAT_B8G8R8A8_TYPELESS ||
+			srcDesc.Format == DXGI_FORMAT_B8G8R8A8_UNORM ||
+			srcDesc.Format == DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+
+		const bool bgrx =
+			srcDesc.Format == DXGI_FORMAT_B8G8R8X8_TYPELESS ||
+			srcDesc.Format == DXGI_FORMAT_B8G8R8X8_UNORM ||
+			srcDesc.Format == DXGI_FORMAT_B8G8R8X8_UNORM_SRGB;
+
+		if (!rgba && !bgra && !bgrx)
+		{
+			utils::write_Debug(
+				"[EmblemPNG] unsupported preview DXGI format=%u",
+				static_cast<unsigned>(srcDesc.Format)
+			);
+			return false;
+		}
+
+		D3D11_TEXTURE2D_DESC stagingDesc = srcDesc;
+		stagingDesc.MipLevels = 1;
+		stagingDesc.ArraySize = 1;
+		stagingDesc.Usage = D3D11_USAGE_STAGING;
+		stagingDesc.BindFlags = 0;
+		stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
+		stagingDesc.MiscFlags = 0;
+		stagingDesc.SampleDesc.Count = 1;
+		stagingDesc.SampleDesc.Quality = 0;
+
+		Microsoft::WRL::ComPtr<ID3D11Texture2D> staging;
+		if (FAILED(pDevice->CreateTexture2D(&stagingDesc, nullptr, staging.GetAddressOf())))
+			return false;
+
+		pContext->CopyResource(staging.Get(), g_privatePreview.texture.Get());
+
+		D3D11_MAPPED_SUBRESOURCE mapped{};
+		const HRESULT mapHr = pContext->Map(
+			staging.Get(),
+			0,
+			D3D11_MAP_READ,
+			0,
+			&mapped
+		);
+
+		if (FAILED(mapHr))
+			return false;
+
+		width = srcDesc.Width;
+		height = srcDesc.Height;
+		pixels.resize(static_cast<std::size_t>(width) * height * 4);
+
+		for (UINT y = 0; y < height; ++y)
+		{
+			const auto* srcRow = static_cast<const std::uint8_t*>(mapped.pData) +
+				static_cast<std::size_t>(y) * mapped.RowPitch;
+			auto* dstRow = pixels.data() + static_cast<std::size_t>(y) * width * 4;
+
+			for (UINT x = 0; x < width; ++x)
+			{
+				const auto* src = srcRow + static_cast<std::size_t>(x) * 4;
+				auto* dst = dstRow + static_cast<std::size_t>(x) * 4;
+
+				if (rgba)
+				{
+					// WIC input below is BGRA, so swap R/B while copying.
+					dst[0] = src[2];
+					dst[1] = src[1];
+					dst[2] = src[0];
+					dst[3] = src[3];
+				}
+				else
+				{
+					dst[0] = src[0];
+					dst[1] = src[1];
+					dst[2] = src[2];
+					dst[3] = bgrx ? 255 : src[3];
+				}
+			}
+		}
+
+		pContext->Unmap(staging.Get(), 0);
+		return true;
+	}
+
+	inline bool SaveBgraToPngWic(
+		const std::filesystem::path& outputPath,
+		const std::vector<std::uint8_t>& pixels,
+		UINT sourceWidth,
+		UINT sourceHeight,
+		UINT outputWidth,
+		UINT outputHeight)
+	{
+		if (pixels.empty() || sourceWidth == 0 || sourceHeight == 0 ||
+			outputWidth == 0 || outputHeight == 0)
+		{
+			return false;
+		}
+
+		const HRESULT coHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+		const bool shouldUninitialize = SUCCEEDED(coHr);
+
+		if (FAILED(coHr) && coHr != RPC_E_CHANGED_MODE)
+			return false;
+
+		bool success = false;
+
+		do
+		{
+			Microsoft::WRL::ComPtr<IWICImagingFactory> factory;
+			if (FAILED(CoCreateInstance(
+				CLSID_WICImagingFactory,
+				nullptr,
+				CLSCTX_INPROC_SERVER,
+				IID_PPV_ARGS(factory.GetAddressOf()))))
+			{
+				break;
+			}
+
+			Microsoft::WRL::ComPtr<IWICBitmap> sourceBitmap;
+			const UINT sourceStride = sourceWidth * 4;
+			const UINT sourceBufferSize = sourceStride * sourceHeight;
+
+			if (FAILED(factory->CreateBitmapFromMemory(
+				sourceWidth,
+				sourceHeight,
+				GUID_WICPixelFormat32bppBGRA,
+				sourceStride,
+				sourceBufferSize,
+				const_cast<BYTE*>(reinterpret_cast<const BYTE*>(pixels.data())),
+				sourceBitmap.GetAddressOf())))
+			{
+				break;
+			}
+
+			Microsoft::WRL::ComPtr<IWICBitmapScaler> scaler;
+			IWICBitmapSource* bitmapSource = sourceBitmap.Get();
+
+			if (sourceWidth != outputWidth || sourceHeight != outputHeight)
+			{
+				if (FAILED(factory->CreateBitmapScaler(scaler.GetAddressOf())))
+					break;
+
+				if (FAILED(scaler->Initialize(
+					sourceBitmap.Get(),
+					outputWidth,
+					outputHeight,
+					WICBitmapInterpolationModeFant)))
+				{
+					break;
+				}
+
+				bitmapSource = scaler.Get();
+			}
+
+			Microsoft::WRL::ComPtr<IWICStream> stream;
+			if (FAILED(factory->CreateStream(stream.GetAddressOf())))
+				break;
+
+			// Ensure a previous file with this name is replaced by the explicit Save action.
+			std::error_code removeEc;
+			std::filesystem::remove(outputPath, removeEc);
+
+			if (FAILED(stream->InitializeFromFilename(outputPath.c_str(), GENERIC_WRITE)))
+				break;
+
+			Microsoft::WRL::ComPtr<IWICBitmapEncoder> encoder;
+			if (FAILED(factory->CreateEncoder(
+				GUID_ContainerFormatPng,
+				nullptr,
+				encoder.GetAddressOf())))
+			{
+				break;
+			}
+
+			if (FAILED(encoder->Initialize(stream.Get(), WICBitmapEncoderNoCache)))
+				break;
+
+			Microsoft::WRL::ComPtr<IWICBitmapFrameEncode> frame;
+			Microsoft::WRL::ComPtr<IPropertyBag2> properties;
+
+			if (FAILED(encoder->CreateNewFrame(frame.GetAddressOf(), properties.GetAddressOf())))
+				break;
+
+			if (FAILED(frame->Initialize(properties.Get())))
+				break;
+
+			if (FAILED(frame->SetSize(outputWidth, outputHeight)))
+				break;
+
+			WICPixelFormatGUID encoderFormat = GUID_WICPixelFormat32bppBGRA;
+			if (FAILED(frame->SetPixelFormat(&encoderFormat)))
+				break;
+
+			Microsoft::WRL::ComPtr<IWICFormatConverter> converter;
+			IWICBitmapSource* writeSource = bitmapSource;
+
+			if (!IsEqualGUID(encoderFormat, GUID_WICPixelFormat32bppBGRA))
+			{
+				if (FAILED(factory->CreateFormatConverter(converter.GetAddressOf())))
+					break;
+
+				if (FAILED(converter->Initialize(
+					bitmapSource,
+					encoderFormat,
+					WICBitmapDitherTypeNone,
+					nullptr,
+					0.0,
+					WICBitmapPaletteTypeCustom)))
+				{
+					break;
+				}
+
+				writeSource = converter.Get();
+			}
+
+			if (FAILED(frame->WriteSource(writeSource, nullptr)))
+				break;
+
+			if (FAILED(frame->Commit()))
+				break;
+
+			if (FAILED(encoder->Commit()))
+				break;
+
+			success = true;
+		} while (false);
+
+		if (shouldUninitialize)
+			CoUninitialize();
+
+		return success;
+	}
+
+	inline bool ExportCurrentPreviewPng(
+		const std::string& requestedFileName,
+		int requestedWidth,
+		int requestedHeight,
+		std::filesystem::path* savedPath = nullptr)
+	{
+		if (!g_hasPrivatePreview || !g_privatePreview.valid())
+			return false;
+
+		if (requestedWidth < 1 || requestedHeight < 1 ||
+			requestedWidth > 8192 || requestedHeight > 8192)
+		{
+			return false;
+		}
+
+		const auto exportDir = GetExportsDirectory();
+		std::error_code ec;
+		std::filesystem::create_directories(exportDir, ec);
+		if (ec)
+			return false;
+
+		const auto fileName = SanitizePngFileName(requestedFileName);
+		const auto outputPath = exportDir / fileName;
+
+		std::vector<std::uint8_t> pixels;
+		UINT sourceWidth = 0;
+		UINT sourceHeight = 0;
+
+		if (!CopyPrivatePreviewToBgra(pixels, sourceWidth, sourceHeight))
+			return false;
+
+		const bool ok = SaveBgraToPngWic(
+			outputPath,
+			pixels,
+			sourceWidth,
+			sourceHeight,
+			static_cast<UINT>(requestedWidth),
+			static_cast<UINT>(requestedHeight)
+		);
+
+		utils::write_Debug(
+			"[EmblemPNG] save=%d src=%ux%u dst=%dx%d path=%s",
+			ok ? 1 : 0,
+			sourceWidth,
+			sourceHeight,
+			requestedWidth,
+			requestedHeight,
+			outputPath.string().c_str()
+		);
+
+		if (ok && savedPath)
+			*savedPath = outputPath;
+
+		return ok;
+	}
+
+	inline void DrawPngExportControls()
+	{
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+		ImGui::TextUnformatted("Save Preview as PNG");
+		ImGui::TextDisabled(
+			"Source texture: %u x %u",
+			g_privatePreview.width,
+			g_privatePreview.height
+		);
+
+		ImGui::InputTextWithHint(
+			"##EmblemPngFileName",
+			"File name...",
+			&g_pngExportFileName
+		);
+
+		const char* exportPresets[] =
+		{
+			"300 x 184",
+			"600 x 368",
+			"1200 x 736",
+			"2400 x 1472",
+			"8175 x 5014",
+			"Custom"
+		};
+
+		if (ImGui::Combo(
+			"Dimensions",
+			&g_pngExportPreset,
+			exportPresets,
+			IM_ARRAYSIZE(exportPresets)))
+		{
+			switch (g_pngExportPreset)
+			{
+			case 0: g_pngExportWidth = 300;  g_pngExportHeight = 184;  break;
+			case 1: g_pngExportWidth = 600;  g_pngExportHeight = 368;  break;
+			case 2: g_pngExportWidth = 1200; g_pngExportHeight = 736;  break;
+			case 3: g_pngExportWidth = 2400; g_pngExportHeight = 1472; break;
+			case 4: g_pngExportWidth = 8175; g_pngExportHeight = 5014; break;
+			default: break;
+			}
+		}
+
+		ImGui::SetNextItemWidth(120.0f);
+		if (ImGui::InputInt("Width", &g_pngExportWidth))
+			g_pngExportPreset = 5;
+
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(120.0f);
+		if (ImGui::InputInt("Height", &g_pngExportHeight))
+			g_pngExportPreset = 5;
+
+		g_pngExportWidth = (std::max)(1, (std::min)(g_pngExportWidth, 8192));
+		g_pngExportHeight = (std::max)(1, (std::min)(g_pngExportHeight, 8192));
+
+		if (ImGui::Button("Save PNG"))
+		{
+			std::filesystem::path savedPath;
+			const bool ok = ExportCurrentPreviewPng(
+				g_pngExportFileName,
+				g_pngExportWidth,
+				g_pngExportHeight,
+				&savedPath
+			);
+
+			ImGui::InsertNotification({
+				ok ? ImGuiToastType::Success : ImGuiToastType::Error,
+				3000,
+				ok ? "Saved PNG to exports folder" : "Failed to save PNG"
+				});
+		}
+
+		ImGui::SameLine();
+		ImGui::TextDisabled("exports/%s", SanitizePngFileName(g_pngExportFileName).c_str());
+	}
+
 	inline CompositeJob* GetTrackedJob_NoLock()
 	{
 		if (!g_job.active || g_job.id == 0)
@@ -3994,7 +4542,7 @@ namespace EmblemPreview
 			return 0;
 
 		return NowMs() - g_job.submitTimeMs;
-	}	
+	}
 
 	inline bool SetPreviewSRVFromGfxImage(GfxImage* image)
 	{
@@ -4066,11 +4614,21 @@ namespace EmblemPreview
 	inline int FindFirstIdleCompositeJobSlot_NoLock()
 	{
 		CompositeJob* jobs = GetCompositeJobs();
+		static int lastAssignedSlot = 0;
 
+		// Start searching from the next slot to distribute load and avoid dead slots
 		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
 		{
-			if (jobs[i].state == COMPOSITE_STATE_IDLE)
-				return i;
+			int index = (lastAssignedSlot + 1 + i) % COMPOSITE_JOB_COUNT;
+
+			// Optional: Skip slot 0 entirely if it's known to trap previews post-match
+			// if (index == 0) continue; 
+
+			if (jobs[index].state == COMPOSITE_STATE_IDLE)
+			{
+				lastAssignedSlot = index;
+				return index;
+			}
 		}
 
 		return -1;
@@ -4123,12 +4681,12 @@ namespace EmblemPreview
 
 			if (now - lastLogMs >= 1000)
 			{
-				/*utils::write_Debug(
+				utils::write_Debug(
 					"[Preview] compositor pool too busy reason=%s active=%d firstIdle=%d",
 					reason ? reason : "unknown",
 					active,
 					firstIdle
-				);*/
+				);
 
 				DumpCompositeJobPool("too busy for preview");
 
@@ -4154,11 +4712,11 @@ namespace EmblemPreview
 			g_job.submitTimeMs = NowMs();
 			g_job.lastLogMs = g_job.submitTimeMs;
 
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] cancel blocked, submitTimeMs was 0 id=%d reason=%s",
 				g_job.id,
 				reason ? reason : "unknown"
-			);*/
+			);
 
 			g_job.releaseRequested = true;
 			return false;
@@ -4168,23 +4726,23 @@ namespace EmblemPreview
 
 		if (!force && age < MIN_CANCEL_AGE_MS)
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] cancel delayed id=%d age=%llu reason=%s",
 				g_job.id,
 				static_cast<unsigned long long>(age),
 				reason ? reason : "unknown"
-			);*/
+			);
 
 			g_job.releaseRequested = true;
 			return false;
 		}
 
-		/*utils::write_Debug(
+		utils::write_Debug(
 			"[Preview] cancel requested id=%d age=%llu reason=%s",
 			g_job.id,
 			static_cast<unsigned long long>(age),
 			reason ? reason : "unknown"
-		);*/
+		);
 
 		CL_CompositePushCancel(g_job.id);
 
@@ -4219,22 +4777,20 @@ namespace EmblemPreview
 			if (!IsPreviewCompositeJob(job))
 				continue;
 
-			// Do not steal the currently tracked job.
-			// Update() owns this one.
 			if (g_job.active && job.id == g_job.id)
 				continue;
 
 			const CompositeJobID id = job.id;
 			GfxImage* image = CL_CompositePopImage(id);
 
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] reap orphan complete composite slot=%d id=%d image=%p semantic=0x%08X reason=%s",
 				i,
 				id,
 				image,
 				job.imageSemantic,
 				reason ? reason : "unknown"
-			);*/
+			);
 
 			if (image)
 				CL_CompositeReleaseImage(image);
@@ -4248,7 +4804,6 @@ namespace EmblemPreview
 	inline int CancelStalePreCompositeJobs(const char* reason)
 	{
 		CompositeJob* jobs = GetCompositeJobs();
-
 		int canceled = 0;
 
 		for (int i = 0; i < COMPOSITE_JOB_COUNT; ++i)
@@ -4264,27 +4819,26 @@ namespace EmblemPreview
 			if (job.type != COMPOSITE_EMBLEM)
 				continue;
 
-			if (!job.setupImage)
-				continue;
-
-			if (job.resultImage)
-				continue;
-
-			if (job.cancel)
-				continue;
-
 			if (g_job.active && job.id == g_job.id)
 				continue;
 
 			/*utils::write_Debug(
-				"[Preview] cancel stale composite slot=%d id=%d semantic=0x%08X reason=%s",
+				"[Preview] forcefully clearing stuck composite slot=%d id=%d reason=%s",
 				i,
 				job.id,
-				job.imageSemantic,
 				reason ? reason : "unknown"
 			);*/
 
+			// 1. Tell the engine to cancel (just in case the thread is still slightly alive)
 			CL_CompositePushCancel(job.id);
+
+			// 2. Brutally overwrite the job memory to free the slot immediately
+			job.state = 0; // COMPOSITE_STATE_IDLE
+			job.id = 0;
+			job.cancel = false;
+			job.setupImage = 0;
+			job.resultImage = nullptr;
+
 			++canceled;
 		}
 
@@ -4347,11 +4901,11 @@ namespace EmblemPreview
 		g_pendingPreview.backendSlot = backendSlot;
 		g_pendingPreview.filePath = filePath;
 
-		/*utils::write_Debug(
+		utils::write_Debug(
 			"[Preview] queued source=%d slot=%d",
 			static_cast<int>(sourceKind),
 			backendSlot
-		);*/
+		);
 	}
 
 	inline bool SubmitFromComposite(
@@ -4361,7 +4915,7 @@ namespace EmblemPreview
 		const std::filesystem::path& filePath = {}
 	)
 	{
-		/*utils::write_Debug(
+		utils::write_Debug(
 			"[Preview] SubmitFromComposite enter source=%d slot=%d active=%d ready=%d pending=%d canUse=%d",
 			static_cast<int>(sourceKind),
 			backendSlot,
@@ -4369,11 +4923,11 @@ namespace EmblemPreview
 			g_job.ready ? 1 : 0,
 			g_pendingPreview.pending ? 1 : 0,
 			CanUsePreview() ? 1 : 0
-		);*/
+		);
 
 		if (!CanUsePreview())
 		{
-			/*utils::write_Debug("[Preview] Submit blocked because CanUsePreview=false");*/
+			utils::write_Debug("[Preview] Submit blocked because CanUsePreview=false");
 			return false;
 		}
 
@@ -4387,13 +4941,13 @@ namespace EmblemPreview
 
 		if (now < g_nextPreviewAllowedMs)
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] submit delayed by cooldown now=%llu allowed=%llu source=%d slot=%d",
 				static_cast<unsigned long long>(now),
 				static_cast<unsigned long long>(g_nextPreviewAllowedMs),
 				static_cast<int>(sourceKind),
 				backendSlot
-			);*/
+			);
 
 			QueuePreview(emblem, sourceKind, backendSlot, filePath);
 			return true;
@@ -4403,7 +4957,7 @@ namespace EmblemPreview
 
 		if (layerCount <= 0 || layerCount > EMBLEM_LAYER_CAPACITY)
 		{
-			/*utils::write_Debug("[Preview] bad layerCount=%d", layerCount);*/
+			utils::write_Debug("[Preview] bad layerCount=%d", layerCount);
 			return false;
 		}
 
@@ -4412,13 +4966,13 @@ namespace EmblemPreview
 
 		if (firstIdleBeforePush < 0 || activeBeforePush >= COMPOSITE_JOB_COUNT - 2)
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] submit delayed, compositor pool too busy active=%d firstIdle=%d source=%d slot=%d",
 				activeBeforePush,
 				firstIdleBeforePush,
 				static_cast<int>(sourceKind),
 				backendSlot
-			);*/
+			);
 
 			DumpCompositeJobPool("submit delayed");
 
@@ -4438,7 +4992,7 @@ namespace EmblemPreview
 
 		if (id == 0)
 		{
-			/*utils::write_Debug("[Preview] PushEmblem returned 0");*/
+			utils::write_Debug("[Preview] PushEmblem returned 0");
 			return false;
 		}
 
@@ -4446,7 +5000,7 @@ namespace EmblemPreview
 
 		if (jobSlot < 0)
 		{
-			/*utils::write_Debug("[Preview] submitted id=%d but could not find job slot", id);*/
+			utils::write_Debug("[Preview] submitted id=%d but could not find job slot", id);
 			return false;
 		}
 
@@ -4464,12 +5018,12 @@ namespace EmblemPreview
 		g_job.backendSlot = backendSlot;
 		g_job.filePath = filePath;
 
-		/*utils::write_Debug(
+		utils::write_Debug(
 			"[Preview] submitted id=%d slot=%d time=%llu",
 			g_job.id,
 			g_job.jobSlot,
 			static_cast<unsigned long long>(g_job.submitTimeMs)
-		);*/
+		);
 
 		return true;
 	}
@@ -4495,10 +5049,10 @@ namespace EmblemPreview
 			{
 				const int canceled = CancelStalePreCompositeJobs("pending pool stuck");
 
-				/*utils::write_Debug(
+				utils::write_Debug(
 					"[Preview] stale pool cleanup canceled=%d",
 					canceled
-				);*/
+				);
 
 				g_triedStalePoolCleanup = true;
 				g_nextPreviewAllowedMs = NowMs() + 500;
@@ -4512,11 +5066,11 @@ namespace EmblemPreview
 
 		if (g_lifecycleReleaseRequested || !CanUsePreview())
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] dropped pending preview lifecycle=%d canUse=%d",
 				g_lifecycleReleaseRequested ? 1 : 0,
 				CanUsePreview() ? 1 : 0
-			);*/
+			);
 
 			g_pendingPreview = {};
 			g_lifecycleReleaseRequested = false;
@@ -4615,16 +5169,15 @@ namespace EmblemPreview
 				copied = CopyGfxImageToPrivatePreview(image);
 			}
 
-			// Critical: immediately return the compositor temp image.
 			CL_CompositeReleaseImage(image);
 			image = nullptr;
 
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] completed id=%d copied=%d privateSrv=%p",
 				finishedId,
 				copied ? 1 : 0,
 				g_privatePreview.srv.Get()
-			);*/
+			);
 
 			g_job = {};
 			g_nextPreviewAllowedMs = NowMs() + PREVIEW_SUBMIT_COOLDOWN_MS;
@@ -4644,12 +5197,12 @@ namespace EmblemPreview
 
 		if (job->state == 0 && (g_job.cancelRequested || g_job.releaseRequested))
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] released/canceled job reached idle id=%d cancel=%d release=%d",
 				g_job.id,
 				g_job.cancelRequested ? 1 : 0,
 				g_job.releaseRequested ? 1 : 0
-			);*/
+			);
 
 			g_job = {};
 			g_pendingPreview = {};
@@ -4658,22 +5211,30 @@ namespace EmblemPreview
 
 		if (now - g_job.lastLogMs >= 1000)
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] waiting id=%d state=%d age=%llu cancel=%d pending=%d",
 				g_job.id,
 				job->state,
 				static_cast<unsigned long long>(age),
 				g_job.cancelRequested ? 1 : 0,
 				g_pendingPreview.pending ? 1 : 0
-			);*/
+			);
 
 			g_job.lastLogMs = now;
 		}
 	}
 
+	inline void HardResetPreviewSubsystem()
+	{
+		g_job = {};
+		g_pendingPreview = {};
+		g_lifecycleReleaseRequested = false;
+		// Force your tracker to rescan slot availability from scratch next frame
+	}
+
 	inline void ResetPreviewAfterMatchReturn()
 	{
-		/*utils::write_Debug("[Preview] reset after match return");*/
+		utils::write_Debug("[Preview] reset after match return");
 
 		if (g_job.active)
 		{
@@ -4700,11 +5261,11 @@ namespace EmblemPreview
 
 		if (reaped || canceled)
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] post-match pool cleanup reaped=%d canceled=%d",
 				reaped,
 				canceled
-			);*/
+			);
 		}
 
 		g_emblemExportBrowser.selectedIndex = -1;
@@ -4712,16 +5273,18 @@ namespace EmblemPreview
 
 		RefreshEmblemSlotList(CONTROLLER_INDEX_0);
 		RefreshEmblemFileList();
+
+		HardResetPreviewSubsystem();
 	}
 
 	inline void ClearLifecycleReleaseIfPreviewAllowed(const char* reason)
 	{
 		if (g_lifecycleReleaseRequested && CanUsePreview() && !g_job.active)
 		{
-			/*utils::write_Debug(
+			utils::write_Debug(
 				"[Preview] clearing lifecycle release reason=%s",
 				reason ? reason : "unknown"
-			);*/
+			);
 
 			g_lifecycleReleaseRequested = false;
 		}
@@ -4737,7 +5300,7 @@ namespace EmblemPreview
 
 		g_previewMenuOpen = menuOpen;
 
-		const bool unsafe = IsPreviewUnsafeForGame();		
+		const bool unsafe = IsPreviewUnsafeForGame();
 
 		const bool matchLoaded = hooks::is_match_loaded();
 		const bool lobby = hooks::is_user_in_lobby();
@@ -4809,7 +5372,7 @@ namespace EmblemPreview
 		int actualSlot
 	)
 	{
-		/*utils::write_Debug(
+		utils::write_Debug(
 			"[Preview] PreviewBackendSlot enter slot=%d menu=%d lobby=%d userInGame=%d localInGame=%d comInGame=%d lifecycle=%d active=%d pending=%d",
 			actualSlot,
 			g_previewMenuOpen ? 1 : 0,
@@ -4820,12 +5383,12 @@ namespace EmblemPreview
 			g_lifecycleReleaseRequested ? 1 : 0,
 			g_job.active ? 1 : 0,
 			g_pendingPreview.pending ? 1 : 0
-		);*/
+		);
 
 		if (!CanUsePreview())
 		{
 			RequestReleaseCurrentPreview("preview requested while unsafe", true);
-			/*utils::write_Debug("[Preview] blocked preview while unsafe/not-lobby");*/
+			utils::write_Debug("[Preview] blocked preview while unsafe/not-lobby");
 			return false;
 		}
 
@@ -4834,7 +5397,7 @@ namespace EmblemPreview
 
 		if (actualSlot < 0 || actualSlot >= 32)
 		{
-			/*utils::write_Debug("[Preview] invalid slot=%d", actualSlot);*/
+			utils::write_Debug("[Preview] invalid slot=%d", actualSlot);
 			return false;
 		}
 
@@ -4851,15 +5414,15 @@ namespace EmblemPreview
 
 		const int layerCount = GetUsedLayerCount(emblem);
 
-		/*utils::write_Debug(
+		utils::write_Debug(
 			"[Preview] slot=%d layerCount=%d",
 			actualSlot,
 			layerCount
-		);*/
+		);
 
 		if (layerCount <= 0)
 		{
-			/*utils::write_Debug("[Preview] slot=%d has no used layers after Live_Emblems_GetEmblemData", actualSlot);*/
+			utils::write_Debug("[Preview] slot=%d has no used layers after Live_Emblems_GetEmblemData", actualSlot);
 			return false;
 		}
 
@@ -4874,17 +5437,17 @@ namespace EmblemPreview
 
 	inline bool PreviewEmblemFile(const std::filesystem::path& path)
 	{
-		/*utils::write_Debug(
+		utils::write_Debug(
 			"[Preview] PreviewEmblemFile enter path=%s menu=%d lobby=%d",
 			path.string().c_str(),
 			g_previewMenuOpen ? 1 : 0,
 			hooks::is_user_in_lobby() ? 1 : 0
-		);*/
+		);
 
 		if (!CanUsePreview())
 		{
 			RequestReleaseCurrentPreview("preview requested while unsafe", true);
-			/*utils::write_Debug("[Preview] blocked preview while unsafe/in-game");*/
+			utils::write_Debug("[Preview] blocked preview while unsafe/in-game");
 			return false;
 		}
 
@@ -4914,7 +5477,7 @@ namespace EmblemPreview
 		if (!CanUsePreview())
 		{
 			RequestReleaseCurrentPreview("backend composite preview while unsafe", true);
-			/*utils::write_Debug("[Preview] blocked backend composite preview while unsafe/in-game");*/
+			utils::write_Debug("[Preview] blocked backend composite preview while unsafe/in-game");
 			return false;
 		}
 
@@ -4988,10 +5551,10 @@ namespace EmblemPreview
 			const float scaleY = avail.y / requestedSize.y;
 			const float scale = (scaleX < scaleY) ? scaleX : scaleY;
 
-			
+
 			drawSize.x = requestedSize.x * scale;
 			drawSize.y = requestedSize.y * scale;
-			
+
 		}
 
 		const float horizontalOffset = (avail.x - drawSize.x) * 0.5f;
@@ -5034,12 +5597,12 @@ namespace EmblemPreview
 	{
 		ImGui::TextUnformatted("Preview");
 
-		// Inside your ImGui rendering block
 		const char* resolutionOptions[] = {
 			"Low (300x184)",
 			"Medium (600x368)",
 			"Good (1200x736)",
-			"Best (2400x1472)"
+			"Best (2400x1472)",
+			"Overkill (8175x5014)"
 		};
 
 		ImGui::Combo("Emblem Quality", &iSelectedResolutionTier, resolutionOptions, IM_ARRAYSIZE(resolutionOptions));
@@ -5058,6 +5621,7 @@ namespace EmblemPreview
 		}
 
 		DrawPreviewImageDirect(imageSize);
+		DrawPngExportControls();
 	}
 
 	void DrawEmblemImportUI()
@@ -5069,6 +5633,8 @@ namespace EmblemPreview
 
 		ImGui::Separator();
 
+		ImGui::SetNextItemWidth(125.0f);
+
 		ImGui::InputInt("Target Slot", &targetSlot);
 
 		if (targetSlot < 0)
@@ -5077,22 +5643,18 @@ namespace EmblemPreview
 		if (targetSlot > 31)
 			targetSlot = 31;
 
+		ImGui::SameLine();
+
+		ImGui::Checkbox("Allow overwrite used slot", &allowOverwrite);
+
+		ImGui::InputTextWithHint("##CustomImportName", "Import Emblem Name...", &customImportName);
+		ImGui::SameLine();
+		ImGui::Checkbox("Rename", &customImportRename);
 
 		if (ImGui::Button("Refresh Emblem Files"))
 		{
 			RefreshEmblemFileList();
 		}
-
-		ImGui::SameLine();
-
-		ImGui::Checkbox("Allow overwrite used slot", &allowOverwrite);
-
-		//ImGui::SameLine();
-
-		ImGui::Checkbox("Rename Imported Emblem", &customImportRename);
-
-		ImGui::InputTextWithHint("##CustomImportName", "Import Emblem Name...", &customImportName);
-
 		ImGui::Separator();
 
 		if (g_emblemImportBrowser.files.empty())
@@ -5111,6 +5673,7 @@ namespace EmblemPreview
 
 					if (ImGui::Selectable(g_emblemImportBrowser.files[i].displayName.c_str(), selected)) {
 						g_emblemImportBrowser.selectedIndex = i;
+						g_pngExportFileName = g_emblemImportBrowser.files[i].path.stem().string();
 						PreviewEmblemFile(g_emblemImportBrowser.files[i].path);
 					}
 
@@ -5194,6 +5757,7 @@ namespace EmblemPreview
 
 					if (ImGui::Selectable(entry.displayName.c_str(), selected)) {
 						g_emblemExportBrowser.selectedIndex = i;
+						g_pngExportFileName = entry.name;
 						PreviewBackendSlot(CONTROLLER_INDEX_0, entry.slot);
 					}
 
@@ -5251,7 +5815,7 @@ namespace EmblemPreview
 				});
 		}
 
-
+		ImGui::SetNextItemWidth(125.0f);
 		ImGui::InputTextWithHint("##RenameEmblem", "Emblem Name", &EmblemRename);
 		ImGui::SameLine();
 		if (ImGui::Button("Rename Selected Emblem"))
@@ -5267,8 +5831,6 @@ namespace EmblemPreview
 				ok ? "Renamed emblem" : "Failed to rename emblem"
 				});
 		}
-
-
 	}
 
 	inline void DrawImportExportContents()
@@ -5487,75 +6049,7 @@ void draw() {
 	style.ItemInnerSpacing = ImVec2(3, 4);
 	style.TabRounding = 5.0f;
 
-	if (!bDisclaimerShown)
-	{
-		*(int*)((DWORD64)OFFSET(0x17DF0405)) = 0;
-
-		RECT desktop;
-		const HWND hDesktop = GetDesktopWindow();
-		GetWindowRect(hDesktop, &desktop);
-
-		ImDrawList* drawlist = ImGui::GetBackgroundDrawList();
-		drawlist->AddRectFilled(
-			ImVec2(0, 0),
-			ImVec2((float)desktop.right, (float)desktop.bottom),
-			IM_COL32(0, 0, 0, 150)
-		);
-
-		ImVec2 window_size = ImVec2(600.0f, 250.0f);
-		ImGui::SetNextWindowSize(window_size, ImGuiCond_Always);
-		ImGui::SetNextWindowPos(
-			ImVec2(desktop.right * 0.5f, desktop.bottom * 0.5f),
-			ImGuiCond_Always,
-			ImVec2(0.5f, 0.5f)
-		);
-
-		if (ImGui::Begin(" - Disclaimer - ", nullptr, ImGuiWindowFlags_NoCollapse))
-		{
-			ImGui::SetWindowFontScale(1.3f);
-
-			ImGui::Spacing();
-			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x);
-			ImGui::TextWrapped(
-
-				"Scropts QOL is FREE. If you paid for this DLL, you should seek a refund. "
-				"We do not use password-protected files or third-party distributors. "
-				"Download only via GitHub to avoid malware and unofficial builds. "
-
-			);
-
-			ImGui::PopTextWrapPos();
-			ImGui::Dummy(ImVec2(0, 25)); 
-
-			ImGui::Separator();
-			ImGui::Spacing();
-			ImGui::Dummy(ImVec2(0, 25));
-
-			float button_width = 130.0f;
-			float Gaps = ImGui::GetStyle().ItemSpacing.x;
-			int num_buttons = 2;
-
-			float total_buttons_width = (num_buttons * button_width) + Gaps;
-
-			ImGui::SetCursorPosX((ImGui::GetWindowSize().x - total_buttons_width) * 0.5f);
-
-			if (ImGui::Button("Okay##DISCLAIMER", ImVec2(button_width, 40))) {
-				bDisclaimerShown = true;
-			}
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("GitHub##DISCLAIMER", ImVec2(button_width, 40))) {
-				ShellExecuteA(0, "open", "https://github.com/Scroptss/Scropts-QOL/releases", 0, 0, SW_SHOW);
-			}
-
-			ImGui::SetWindowFontScale(1.0f);
-			ImGui::End();
-
-		}
-	}
-
-	if (open && bDisclaimerShown) {
+	if (open) {
 
 		*(int*)((DWORD64)OFFSET(0x17DF0405)) = 0;
 
@@ -5577,7 +6071,7 @@ void draw() {
 		ImGui::Begin(title.c_str(), &open);
 
 		ImGui::BeginTabBar("##main");
-		
+
 		if (ImGui::BeginTabItem("Account", nullptr)) {
 
 			auto currentMode = Com_SessionMode_GetMode();
@@ -5612,6 +6106,14 @@ void draw() {
 				maxParagonXP = 52345460;
 				maxRankIcon = 55;
 				minRank = 36;
+			}
+			else {
+				maxLevel = 0;
+				maxPrestige = 0;
+				maxXP = 0;
+				maxParagonXP = 0;
+				maxRankIcon = 0;
+				minRank = 0;
 			}
 
 			constexpr int kStatMax = MAXINT / 2;
@@ -5659,8 +6161,10 @@ void draw() {
 
 			if (ImGui::Button("Set Rank Icon")) {
 				ClampInt(icon, 0, maxRankIcon);
-				LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
-				LiveStorage_UploadStatsForController(0);
+				if (RankIconExistsForMode(currentMode, icon)) {
+					LiveStats_SetStatByKey(Com_SessionMode_GetMode(), CONTROLLER_INDEX_0, MP_PLAYERSTATSKEY_PARAGONICONID, icon);
+					LiveStorage_UploadStatsForController(0);
+				}
 			}
 
 			ImGui::SameLine();
@@ -5693,21 +6197,19 @@ void draw() {
 			// Level
 			if (ImGui::Button("Send##LEVEL"))
 			{
-				const int mode = Com_SessionMode_GetMode();
-
 				int visibleLevel = pLevel;
 				ClampInt(visibleLevel, 1, maxLevel + 1);
 
 				const int storedRank = visibleLevel - 1;
 
-				rankXp = GetRankXPFromTable(mode, storedRank);
+				rankXp = GetRankXPFromTable(currentMode, storedRank);
 
 				setpLevel(storedRank);
 				setpLevelXP(rankXp);
 
 				LiveStorage_UploadStatsForController(0);
 			}
-			
+
 			int displayLevel = pLevel + 1;
 
 			ImGui::SameLine();
@@ -5722,11 +6224,9 @@ void draw() {
 			// Prestige Master Rank
 			if (ImGui::Button("Send##PRESTIGEMASTERRANK"))
 			{
-				const int mode = Com_SessionMode_GetMode();
-
 				ClampInt(ParagonRank, minRank, 1000);
 
-				paragonRankXp = GetParagonXPFromTable(mode, ParagonRank);
+				paragonRankXp = GetParagonXPFromTable(currentMode, ParagonRank);
 
 				setMasterRank(ParagonRank);
 				setMasterXP(paragonRankXp);
@@ -5739,14 +6239,17 @@ void draw() {
 
 			// Rank Icon
 			if (ImGui::Button("Send##RANKICON")) {
+
 				ClampInt(icon, 0, maxRankIcon);
-				LiveStats_SetStatByKey(
-					Com_SessionMode_GetMode(),
-					CONTROLLER_INDEX_0,
-					MP_PLAYERSTATSKEY_PARAGONICONID,
-					icon
-				);
-				LiveStorage_UploadStatsForController(0);
+				if (RankIconExistsForMode(currentMode, icon)) {
+					LiveStats_SetStatByKey(
+						Com_SessionMode_GetMode(),
+						CONTROLLER_INDEX_0,
+						MP_PLAYERSTATSKEY_PARAGONICONID,
+						icon
+					);
+					LiveStorage_UploadStatsForController(0);
+				}
 			}
 
 			ImGui::SameLine();
@@ -5951,7 +6454,7 @@ void draw() {
 			InputIntClamped("Total Rounds Survived##RANK", &iTotalRounds, 0, kStatMax);
 
 			ImGui::Separator();
-		
+
 
 			if (ImGui::Button("Unlock All Class Slots")) {
 
@@ -6008,17 +6511,17 @@ void draw() {
 
 			if (ImGui::Button("Complete Challenges")) {
 				UnlockMilestoneTable("mp_statstable", 0, 256, 9, 2, 3);
-				setStatMilestones("mp","statsmilestones1.csv");
-				setStatMilestones("mp","statsmilestones2.csv");
-				setStatMilestones("mp","statsmilestones3.csv");
-				setStatMilestones("mp","statsmilestones4.csv");
-				setStatMilestones("mp","statsmilestones5.csv");
-				setStatMilestones("mp","statsmilestones6.csv");
+				setStatMilestones("mp", "statsmilestones1.csv");
+				setStatMilestones("mp", "statsmilestones2.csv");
+				setStatMilestones("mp", "statsmilestones3.csv");
+				setStatMilestones("mp", "statsmilestones4.csv");
+				setStatMilestones("mp", "statsmilestones5.csv");
+				setStatMilestones("mp", "statsmilestones6.csv");
 
-				setStatMilestones("zm","statsmilestones3.csv");
+				setStatMilestones("zm", "statsmilestones3.csv");
 
-				setStatMilestones("cp","statsmilestones1.csv");
-				setStatMilestones("cp","statsmilestones3.csv");
+				setStatMilestones("cp", "statsmilestones1.csv");
+				setStatMilestones("cp", "statsmilestones3.csv");
 				unlockArenaStats();
 				setGameTypeStats();
 				LiveStorage_UploadStatsForController(0);
@@ -6132,19 +6635,19 @@ void draw() {
 
 			ImGui::Dummy(ImVec2(0, 5));
 
-			
+
 			if (ImGui::Button("Fast Restart Map")) {
 				Cbuf_AddText(0, "fast_restart");
 			}
 
-			ImGui::SameLine(0.0f,3.0f);
+			ImGui::SameLine(0.0f, 3.0f);
 
 			if (ImGui::Button("Full Restart Map")) {
 				Cbuf_AddText(0, "map_restart");
 			}
 
-			ImGui::SameLine(0.0f,3.0f);
-		
+			ImGui::SameLine(0.0f, 3.0f);
+
 
 			ImGui::Checkbox("First Gum Free", &bFirstGumFree);
 
@@ -6176,7 +6679,7 @@ void draw() {
 
 			HelpMarker("Toggle server cheats to run console commands like noclip or godmode");
 
-			ImGui::SameLine(0.0f,3.0f);
+			ImGui::SameLine(0.0f, 3.0f);
 
 			ImGui::Checkbox("God Mode", &bGodMode);
 
@@ -6355,7 +6858,7 @@ void draw() {
 			if (ImGui::Button("Modded Lobby##GSPEED")) {
 				auto callvote = "callvote map \"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nfast_restart\nset scr_tdm_score_kill 9999999999\nscr_xpscaleMP 99999\"";
 				CL_AddReliableCommand(0, callvote);
-			}			
+			}
 
 			ImGui::Separator();
 
@@ -6404,12 +6907,12 @@ void draw() {
 				ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "Successfully set." });
 			}
 			ImGui::SameLine();
-			ImGui::InputInt("Color Index", &ColorIndex);			
+			ImGui::InputInt("Color Index", &ColorIndex);
 
 			ImGui::Separator();
 
 			const char* ShowcaseWeaponName = getItemNameforItemID(weaponIndex);
-			ImGui::BulletText("Showcase Weapon: %s",ShowcaseWeaponName);
+			ImGui::BulletText("Showcase Weapon: %s", ShowcaseWeaponName);
 
 			static std::string previewWeapValue = "";
 			static std::string previewCamoValue = "";
@@ -6426,7 +6929,7 @@ void draw() {
 							previewWeapValue = itemName;
 							weaponIndex = i;
 						}
-					
+
 					}
 				}
 				ImGui::EndCombo();
@@ -6443,7 +6946,7 @@ void draw() {
 						if (ImGui::IsItemClicked()) {
 							previewCamoValue = itemName;
 							camoIndex = i;
-						}					
+						}
 					}
 				}
 				ImGui::EndCombo();
@@ -6656,7 +7159,7 @@ void draw() {
 				bFileshareDownloadingRan = false;
 				//ImGui::InsertNotification({ ImGuiToastType::Success, 5000, "Deactivated Fileshare Downloading." });
 			}
-			
+
 
 			if (ImGui::Button("Fix Downloaded Items")) {
 
@@ -6742,7 +7245,7 @@ void draw() {
 			ImGui::EndChild();
 			ImGui::EndTabItem();
 		}
-		
+
 		if (ImGui::BeginTabItem("Weapon Stats", nullptr))
 		{
 			ImGui::BeginChild("##WEPRANKING", ImGui::GetContentRegionAvail());
@@ -6974,14 +7477,14 @@ void draw() {
 		if (ImGui::BeginTabItem("Info", nullptr)) {
 
 			ImGui::BeginChild("##INFO", ImGui::GetContentRegionAvail());
-					
+
 			ImGui::Dummy(ImVec2(0, 5));
 			ImGui::InputTextWithHint("##TITLE", "Screenshot Title", &custom_title_buf);
 			ImGui::InputTextWithHint("##DESC", "Screenshot Description", &custom_desc_buf);
 
 			//ImGui::SeparatorText("Emblem Auto Export");
 			ImGui::Dummy(ImVec2(10, 10));
-			ImGui::Text("Version: %s", SCROPTS_VERSION);	
+			ImGui::Text("Version: %s", SCROPTS_VERSION);
 
 			ImGui::EndChild();
 			ImGui::EndTabItem();
@@ -7040,7 +7543,7 @@ void draw() {
 					eGameModes a = Com_SessionMode_GetGameMode();
 					eModes a1 = Com_SessionMode_GetMode();
 					auto a3 = LiveStats_ClassSets_GetClassSetTypeForMode(a1, a);
-					LiveStats_SetClassSetname(0, a3, classSetIndex, classSetName.c_str());
+					BG_UnlockablesSetClassSetName(0, a3, classSetIndex, classSetName.c_str());
 				}
 
 
@@ -7110,7 +7613,7 @@ void draw() {
 					ImGui::SetTooltip("Make sure you are in your selected class in CAC before clicking this button.");
 				}
 
-				ImGui::SameLine(150,0);
+				ImGui::SameLine(150, 0);
 				ImGui::SetNextItemWidth(120.0f);
 				ImGui::Combo("Combo Box Type", &iComboBoxType, "Weapons\000Attachments\000Camos\000Reticles\000Perks\000WildCards\000KillStreaks\000Extra\000");
 
@@ -7125,13 +7628,13 @@ void draw() {
 
 					ImGui::Separator();
 
-					ImGui::BeginChild("##PRIMARYLIST", ImGui::GetContentRegionAvail());
+					if (ImGui::BeginChild("##PRIMARYLIST", ImGui::GetContentRegionAvail())) {
 
-					DrawSlotTable(primarySlotsTable, 10, classSetIndex, classIndex);
+						// Primary Weapon and attachment / camo editor
+						DrawSlotTable(primarySlotsTable, 10, classSetIndex, classIndex);
+						ImGui::EndChild();
+					}
 
-					// Primary Weapon and attachment / camo editor
-
-					ImGui::EndChild();
 					ImGui::EndChild();
 				}
 
@@ -7147,12 +7650,13 @@ void draw() {
 
 					ImGui::Separator();
 
-					ImGui::BeginChild("##SECONDARYLIST", ImGui::GetContentRegionAvail());
+					if (ImGui::BeginChild("##SECONDARYLIST", ImGui::GetContentRegionAvail())) {
 
-					DrawSlotTable(secondarySlotsTable, 10, classSetIndex, classIndex);
-					// Secondary Weapon and attachment / camo editor
+						// Secondary Weapon and attachment / camo editor
+						DrawSlotTable(secondarySlotsTable, 10, classSetIndex, classIndex);
 
-					ImGui::EndChild();
+						ImGui::EndChild();
+					}
 					ImGui::EndChild();
 				}
 
@@ -7164,12 +7668,13 @@ void draw() {
 
 					ImGui::Separator();
 
-					ImGui::BeginChild("##OFFHANDLIST", ImGui::GetContentRegionAvail());
+					if (ImGui::BeginChild("##OFFHANDLIST", ImGui::GetContentRegionAvail())) {
 
-					DrawSlotTable(offhandSlotsTable, 8, classSetIndex, classIndex);
-					// Wildcard and maybe Streak Editor?
+						// Wildcard and maybe Streak Editor?
+						DrawSlotTable(offhandSlotsTable, 8, classSetIndex, classIndex);
 
-					ImGui::EndChild();
+						ImGui::EndChild();
+					}
 					ImGui::EndChild();
 				}
 
@@ -7185,13 +7690,14 @@ void draw() {
 
 					ImGui::Separator();
 
-					ImGui::BeginChild("##WILDCARDLIST", ImGui::GetContentRegionAvail());
+					if (ImGui::BeginChild("##WILDCARDLIST", ImGui::GetContentRegionAvail())) {
 
-					DrawSlotTable(wildcardSlotsTable, 9, classSetIndex, classIndex);
+						DrawSlotTable(wildcardSlotsTable, 9, classSetIndex, classIndex);
 
-					// Lethals, Tacticals
+						// Lethals, Tacticals
 
-					ImGui::EndChild();
+						ImGui::EndChild();
+					}
 					ImGui::EndChild();
 				}
 
@@ -7401,7 +7907,7 @@ HRESULT __stdcall hkPresent(IDXGISwapChain* pSwapChain, UINT SyncInterval, UINT 
 
 		draw();
 		drawTracers();
-		
+
 		if (bNotifications)
 		{
 			ImGui::RenderNotifications();

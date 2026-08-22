@@ -195,6 +195,13 @@ namespace hooks {
 
 	namespace functions {
 
+		const char* hkCL_Rank_GetParagonIcon(unsigned int mode, int iconId, GfxImage** outName)
+		{
+			if (iconId > 55) return nullptr;
+
+			return CL_Rank_GetParagonIcon(mode, iconId, outName);
+		}
+
 
 		GfxImage* hkR_CodeImage_Create(
 			int width,
@@ -203,8 +210,7 @@ namespace hooks {
 			int flags,
 			const char* name)
 		{
-			const auto ret = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
-			
+			const auto ret = reinterpret_cast<std::uintptr_t>(_ReturnAddress());			
 
 			if (ret == OFFSET(0x1336080))
 			{
@@ -228,6 +234,10 @@ namespace hooks {
 				case 3:
 					overrideWidth = 2400;
 					overrideHeight = 1472;
+					break;
+				case 4:
+					overrideWidth = 8175;
+					overrideHeight = 5014;
 					break;
 				}
 				return R_CodeImage_Create(overrideWidth, overrideHeight, imageFormat, flags, name);
@@ -1274,6 +1284,7 @@ namespace hooks {
 
 		PatchPrecomputed();
 
+		MH_CreateHook((LPVOID)(ProcessBase + 0x13CA5E0), functions::hkCL_Rank_GetParagonIcon, (LPVOID*)&CL_Rank_GetParagonIcon);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x1C81370), functions::hkR_CodeImage_Create, (LPVOID*)&R_CodeImage_Create);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x2631C10), functions::hkBG_UnlockablesItemOptionLocked, (LPVOID*)&BG_UnlockablesItemOptionLocked);
 		MH_CreateHook((LPVOID)(ProcessBase + 0x20EB2F0), functions::hkCom_SessionMode_IsOnlineGame, (LPVOID*)&Com_SessionMode_IsOnlineGame);
@@ -1313,6 +1324,7 @@ namespace hooks {
 
 	void restorePatches() {
 
+		MH_RemoveHook((LPVOID)(ProcessBase + 0x13CA5E0));		//CL_Rank_GetParagonIcon
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x1C81370));		//R_CodeImage_Create
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x2631C10));		//BG_UnlockablesItemOptionLocked
 		MH_RemoveHook((LPVOID)(ProcessBase + 0x20EB2F0));		//hkCom_SessionMode_IsOnlineGame

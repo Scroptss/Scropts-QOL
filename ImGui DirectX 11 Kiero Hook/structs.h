@@ -2562,7 +2562,8 @@ enum class ResolutionTier {
 	Low = 0,    // 300x184
 	Medium,     // 600x368
 	Good,       // 1200x736
-	Best        // 2400x1472
+	Best,        // 2400x1472
+	Overkill        // 8175x5014
 };
 
 using CompositeJobID = std::int32_t;
@@ -2727,3 +2728,24 @@ static_assert(offsetof(CompositeEmblem_PC, highlightGroup) == 0x1C3D);
 static_assert(offsetof(CompositeEmblem_PC, highlightBorder) == 0x1C3E);
 
 */
+
+// static s_rankData @ 0x576A980
+struct rankData_t
+{
+	int minxp[96];               // 0x0
+	int maxxp[96];               // 0x180
+	int rankId[96];              // 0x300
+	unsigned __int8 unlocks[96][27]; // 0x480
+	int topRow;                  // 0xEA0
+	int paragonMinXp[1000];      // 0xEA4
+	int paragonMaxXp[1000];      // 0x1E44
+	int paragonRankId[1000];     // 0x2DE4
+	int paragonTopRow;           // 0x3D84
+	int prestigeCap;             // 0x3D88
+	int xpCap;                   // 0x3D8C
+	int starterPackMaxXp;        // 0x3D90
+	int paragonXpCap;            // 0x3D94
+	bool isValid;                // 0x3D98
+}; // Size 0x3D9C
+
+static_assert(sizeof(rankData_t) == 0x3D9C);
