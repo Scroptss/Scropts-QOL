@@ -74,6 +74,12 @@
     <ClInclude Include="host.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ui_helpers.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="t7x_scripts.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="common.h">
       <Filter>Header Files</Filter>
     </ClInclude>
