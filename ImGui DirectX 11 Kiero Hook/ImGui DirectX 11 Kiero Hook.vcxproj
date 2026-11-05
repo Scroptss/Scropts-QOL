@@ -158,6 +158,9 @@
     <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="host.cpp" />
+    <ClCompile Include="Players.cpp" />
+    <ClCompile Include="servers.cpp" />
+    <ClCompile Include="structs.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h" />

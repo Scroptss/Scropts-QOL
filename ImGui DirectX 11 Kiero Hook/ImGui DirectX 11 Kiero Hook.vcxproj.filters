@@ -33,6 +33,15 @@
     <ClCompile Include="host.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Players.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="servers.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="structs.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="common.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
