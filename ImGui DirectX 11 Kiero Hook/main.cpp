@@ -5,6 +5,8 @@
 #include "host.h"
 #include "servers.h"
 #include "players.h"
+#include "ui_helpers.hpp"
+#include "t7x_scripts.hpp"
 #include <d3dcompiler.h>
 #include <wincodec.h>
 #pragma comment(lib, "d3dcompiler.lib")
@@ -6123,6 +6125,7 @@ void draw() {
 			ImGui::Dummy(ImVec2(0, 5));
 
 			ImGui::Checkbox("Freeze Stats", &bProtectStats);
+			ui::TooltipOnHover("Blocks the game from writing stat changes to your profile. Test stat edits safely and revert them later.");
 
 			ImGui::SameLine();
 
@@ -6141,6 +6144,7 @@ void draw() {
 			ImGui::SameLine();
 
 			ImGui::Checkbox("Arena", &bArena);
+			ui::TooltipOnHover("Targets Arena progression stats instead of the standard multiplayer stat table.");
 
 			ImGui::SameLine();
 
@@ -6595,6 +6599,7 @@ void draw() {
 			}
 
 			ImGui::Checkbox("Force Host", &bForceHost);
+			ui::TooltipOnHover("Nudges matchmaking so you become host of the zombie lobby. Pair with a GSC menu for full control.");
 
 			if (bForceHost && !bForceHostRan) {
 				host::setforcehostdvars(true);
@@ -6665,6 +6670,7 @@ void draw() {
 			HelpMarker("Relive the OG days where the first gobblegum wasn't free!");
 
 			ImGui::Checkbox("Sv_Cheats", &bsvCheats);
+			ui::TooltipOnHover("Enables sv_cheats in the current session so cheat-protected console commands are accepted.");
 
 			if (bsvCheats && !bsvCheatsRan) {
 				Dvar_SetFromString("sv_cheats", "1", false);
@@ -6682,10 +6688,12 @@ void draw() {
 			ImGui::SameLine(0.0f, 3.0f);
 
 			ImGui::Checkbox("God Mode", &bGodMode);
+			ui::TooltipOnHover("Toggles god mode for the local player in zombies.");
 
 			ImGui::SameLine(0.0f, 3.0f);
 
 			ImGui::Checkbox("Inf Ammo", &bInfAmmo);
+			ui::TooltipOnHover("Keeps your ammunition topped up while enabled.");
 
 			if (bInfAmmo && !bInfAmmoRan) {
 				Dvar_SetFromString("player_sustainAmmo", "1", false);
@@ -6850,6 +6858,7 @@ void draw() {
 			ImGui::SameLine();
 
 			ImGui::Checkbox("Make Custom Game Earn XP", &bCustomXP);
+			ui::TooltipOnHover("Allows XP gain inside your own custom matches.");
 
 			if (ImGui::IsItemHovered()) {
 				ImGui::SetTooltip("Make sure you enable this AFTER the 10 second countdown!");
@@ -6978,6 +6987,7 @@ void draw() {
 			ImGui::Dummy(ImVec2(0, 5));
 
 			ImGui::SliderInt("Loot Speed (ms)", &iLootSpeed, 0, 500);
+			ui::TooltipOnHover("Delay in milliseconds between automated Black Market actions. Lower is faster.");
 
 			if (ImGui::IsItemHovered()) {
 				ImGui::SetTooltip("How long in ms should we wait to call crypto functions again.");
@@ -6986,6 +6996,7 @@ void draw() {
 			ImGui::SliderInt("Crypto Amount ##CRYPTOAMT", &iCryptoAmt, 0, 48);
 
 			ImGui::Checkbox("Loop Cryptokeys", &bCrypto);
+			ui::TooltipOnHover("Continuously opens cryptokeys while enabled.");
 
 			ImGui::SameLine(0.0f, 5.0f);
 
@@ -7011,6 +7022,7 @@ void draw() {
 			ImGui::Dummy(ImVec2(0, 5));
 
 			ImGui::Checkbox("Loop Divinium", &bDivinium);
+			ui::TooltipOnHover("Continuously spends divinium while enabled.");
 
 			ImGui::SameLine(0.0f, 5.0f);
 
@@ -7106,12 +7118,14 @@ void draw() {
 			ImGui::Dummy(ImVec2(0, 5));
 
 			ImGui::Checkbox("Unlock Full Game (DLC)", &bUnlockFullGame);
+			ui::TooltipOnHover("Spoofs DLC entitlements locally so all maps and content show as owned in your menus.");
 
 			if (ImGui::IsItemHovered()) {
 				ImGui::SetTooltip("Make sure the host of the match is using this QOL if you are playing a zombies map you unlocked with this!");
 			}
 
 			ImGui::Checkbox("Blackmarket Items", &bSpoofBlackMarket);
+			ui::TooltipOnHover("Spoofs Black Market inventory items as unlocked locally.");
 
 			if (ImGui::IsItemHovered()) {
 				ImGui::SetTooltip("Sets the quantity of every black market item and gobblegum to the quantity you choose.\n\nSpecial supply drops 'unlocked' with this will error out and not give any items (Grand Slam, contract bribes etc). Spending cryptokeys and LD you have will still work as normal.");
@@ -7344,6 +7358,7 @@ void draw() {
 			static std::string dvar_input = "";
 
 			ImGui::InputTextWithHint("##DVAR", "DVAR", &dvar_input);
+			ui::TooltipOnHover("Sets a dvar by name and value, e.g. name value.");
 
 			ImGui::SameLine();
 
@@ -7361,6 +7376,7 @@ void draw() {
 			static std::string cbuf_input = "";
 
 			ImGui::InputTextWithHint("##CBUF", "CBUF", &cbuf_input);
+			ui::TooltipOnHover("Sends a raw command to the console buffer.");
 			ImGui::SameLine();
 
 			if (ImGui::Button("Send##CBUF"))
@@ -7424,10 +7440,12 @@ void draw() {
 			if (ImGui::Button("Apply Hooks")) {
 				hooks::applyPatches();
 			}
+			ui::TooltipOnHover("Re-applies engine patches used by the menu. Run again if features stop responding after joining a lobby.");
 
 			if (ImGui::Button("Back to Main Menu")) {
 				Cbuf_AddText(0, "disconnect");
 			}
+			ui::TooltipOnHover("Sends the disconnect command and returns to the main menu.");
 
 			int currentIndex = 0;
 			for (int i = 0; i < 17; i++) {
@@ -7450,6 +7468,64 @@ void draw() {
 			}
 			ImGui::EndChild();
 
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Scripts", nullptr)) {
+			ImGui::BeginChild("##SCRIPTS", ImGui::GetContentRegionAvail());
+
+			ImGui::Dummy(ImVec2(0, 5));
+
+			const bool t7xRunning = t7x_scripts::IsT7xRunning();
+			ImGui::TextColored(t7xRunning ? ImVec4(0.4f, 0.9f, 0.4f, 1.0f) : ImVec4(0.9f, 0.4f, 0.4f, 1.0f),
+				t7xRunning ? "T7x client detected" : "T7x client not detected");
+			ui::TooltipOnHover("T7x loads GSC scripts from t7x\\custom_scripts inside the game folder at startup. Steam BO3 ignores this folder.");
+
+			static std::vector<t7x_scripts::ScriptEntry> scripts;
+			static bool scriptsDirty = true;
+			if (scriptsDirty) {
+				scripts = t7x_scripts::ListScripts();
+				scriptsDirty = false;
+			}
+
+			ImGui::Text("Compiled scripts found: %d", (int)scripts.size());
+			ImGui::SameLine();
+			if (ImGui::Button("Refresh")) {
+				scriptsDirty = true;
+			}
+			ui::TooltipOnHover("Re-scans the t7x custom scripts folder.");
+
+			ImGui::SameLine();
+			if (ImGui::Button("Open Folder")) {
+				t7x_scripts::OpenScriptsFolder();
+			}
+			ui::TooltipOnHover("Opens t7x\\custom_scripts in Explorer. Drop your compiled .gsc files there.");
+
+			ImGui::Separator();
+			if (scripts.empty()) {
+				ImGui::TextDisabled("No .gsc scripts found. Compile scripts with a T7 GSC compiler and place them in t7x\\custom_scripts.");
+			}
+			else {
+				ImGui::BeginChild("##SCRIPTLIST", ImVec2(0, 150.0f));
+				for (const auto& script : scripts) {
+					ImGui::BulletText("%s (%.1f KB)", script.name.c_str(), (float)script.size / 1024.0f);
+				}
+				ImGui::EndChild();
+			}
+
+			ImGui::SeparatorText("Quick Dvars");
+			ui::TooltipOnHover("Applies well-known client dvars through the console buffer instead of direct memory writes.");
+
+			static int fovValue = 80;
+			ImGui::SetNextItemWidth(200);
+			ImGui::SliderInt("FOV", &fovValue, 65, 120, "%d");
+			ImGui::SameLine();
+			if (ImGui::Button("Apply##FOV")) {
+				Cbuf_AddText(0, ("cg_fov " + std::to_string(fovValue)).c_str());
+			}
+			ui::TooltipOnHover("Sends cg_fov to the console. Only applies in modes that allow client dvar changes.");
+
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 		}
 
